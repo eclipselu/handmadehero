@@ -1,3 +1,11 @@
+Day 4
+============
+
+- Penalty on un-aligned access, if a value is 4 byte long, it should fall on the address of 4 byte boundaries like 0, 4, 8...
+- VirtualAlloc to alloc memory, 
+- Forgot to set bmiHeader.biPlanes to 1, the window did not display anything.
+
+
 Day 3
 ============
 

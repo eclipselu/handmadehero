@@ -1,3 +1,4 @@
+#include <cstdint>
 #include <windows.h>
 
 #define global        static
@@ -8,43 +9,72 @@
 global bool       g_app_running;
 global BITMAPINFO g_bitmap_info;
 global void*      g_bitmap_memory;
-global HBITMAP    g_bitmap_handle;
-global HDC        g_device_ctx;
+global int        g_bitmap_width;
+global int        g_bitmap_height;
 
 internal void
 ResizeDIBSection(int width, int height) {
-    if (g_bitmap_handle) {
-        DeleteObject(g_bitmap_handle);
+    int bitmap_memory_size = width * height * 4;
+
+    if (g_bitmap_memory) {
+        // maybe we can use MEM_DECOMMIT
+        VirtualFree(g_bitmap_memory, 0, MEM_RELEASE);
+        // VirtualProtect?
     }
 
-    if (!g_device_ctx) {
-        // TODO: should we recreate this?
-        g_device_ctx = CreateCompatibleDC(0);
-    }
+    g_bitmap_width  = width;
+    g_bitmap_height = height;
 
-    g_bitmap_info.bmiHeader.biSize        = sizeof(g_bitmap_info.bmiHeader);
-    g_bitmap_info.bmiHeader.biWidth       = width;
-    g_bitmap_info.bmiHeader.biHeight      = height;
+    g_bitmap_info.bmiHeader.biSize  = sizeof(g_bitmap_info.bmiHeader);
+    g_bitmap_info.bmiHeader.biWidth = width;
+    // If biHeight is negative, the bitmap is a top-down DIB with the origin at the upper left
+    // corner.
+    g_bitmap_info.bmiHeader.biHeight      = -height;
+    g_bitmap_info.bmiHeader.biPlanes      = 1;  // must be 1
     g_bitmap_info.bmiHeader.biBitCount    = 32; // alignment?
     g_bitmap_info.bmiHeader.biCompression = BI_RGB;
 
-    g_bitmap_handle =
-        CreateDIBSection(g_device_ctx, &g_bitmap_info, DIB_RGB_COLORS, &g_bitmap_memory, NULL, 0);
+    g_bitmap_memory = VirtualAlloc(0, bitmap_memory_size, MEM_COMMIT, PAGE_READWRITE);
+
+    uint8_t* row = (uint8_t*)g_bitmap_memory;
+    for (int y = 0; y < g_bitmap_height; ++y) {
+        uint8_t* pixel = (uint8_t*)row;
+
+        for (int x = 0; x < g_bitmap_width; ++x) {
+            // byte order: BB RR GG 00
+
+            *pixel = (uint8_t)y;
+            ++pixel;
+
+            *pixel = (uint8_t)x;
+            ++pixel;
+
+            *pixel = (uint8_t)(x + y);
+            ++pixel;
+
+            *pixel = 0;
+            ++pixel;
+        }
+
+        row += 4 * g_bitmap_width;
+    }
 }
 
 internal void
-UpdateWindow(HDC device_ctx, int x, int y, int width, int height) {
-    // TODO
+UpdateWindow(HDC device_ctx, RECT* window_rect, int x, int y, int width, int height) {
+    int window_width  = window_rect->right - window_rect->left;
+    int window_height = window_rect->bottom - window_rect->top;
+
     StretchDIBits(
         device_ctx,
-        x,
-        y,
-        width,
-        height,
-        x,
-        y,
-        width,
-        height,
+        0,
+        0,
+        g_bitmap_width,
+        g_bitmap_height,
+        0,
+        0,
+        window_width,
+        window_height,
         g_bitmap_memory,
         &g_bitmap_info,
         DIB_RGB_COLORS,
@@ -92,7 +122,9 @@ MainWindowCallback(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
         LONG height = paint.rcPaint.bottom - paint.rcPaint.top;
 
         // redraw the window using the back buffer.
-        UpdateWindow(device_ctx, x, y, width, height);
+        RECT client_rect = {};
+        GetClientRect(window, &client_rect);
+        UpdateWindow(device_ctx, &client_rect, x, y, width, height);
 
         EndPaint(window, &paint);
     } break;
