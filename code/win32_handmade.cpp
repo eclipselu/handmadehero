@@ -13,6 +13,26 @@ global int        g_bitmap_width;
 global int        g_bitmap_height;
 
 internal void
+RenderBitmap(int x_offset, int y_offset) {
+    uint8_t* row = (uint8_t*)g_bitmap_memory;
+    for (int y = 0; y < g_bitmap_height; ++y) {
+        uint32_t* pixel = (uint32_t*)row;
+
+        for (int x = 0; x < g_bitmap_width; ++x) {
+            // byte order: BB GG RR 00
+
+            uint8_t blue  = (uint8_t)(y + y_offset);
+            uint8_t green = (uint8_t)(x + x_offset);
+            uint8_t red   = (uint8_t)(x + y + x_offset + y_offset);
+            *pixel        = (red << 16) | (green << 8) | blue;
+            ++pixel;
+        }
+
+        row += 4 * g_bitmap_width;
+    }
+}
+
+internal void
 ResizeDIBSection(int width, int height) {
     int bitmap_memory_size = width * height * 4;
 
@@ -36,28 +56,7 @@ ResizeDIBSection(int width, int height) {
 
     g_bitmap_memory = VirtualAlloc(0, bitmap_memory_size, MEM_COMMIT, PAGE_READWRITE);
 
-    uint8_t* row = (uint8_t*)g_bitmap_memory;
-    for (int y = 0; y < g_bitmap_height; ++y) {
-        uint8_t* pixel = (uint8_t*)row;
-
-        for (int x = 0; x < g_bitmap_width; ++x) {
-            // byte order: BB RR GG 00
-
-            *pixel = (uint8_t)y;
-            ++pixel;
-
-            *pixel = (uint8_t)x;
-            ++pixel;
-
-            *pixel = (uint8_t)(x + y);
-            ++pixel;
-
-            *pixel = 0;
-            ++pixel;
-        }
-
-        row += 4 * g_bitmap_width;
-    }
+    RenderBitmap(64, 64);
 }
 
 internal void
@@ -143,7 +142,7 @@ int WINAPI
 WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cmd) {
     WNDCLASSA windowClass = {};
 
-    windowClass.style         = CS_OWNDC | CS_VREDRAW | CS_HREDRAW;
+    windowClass.style         = CS_VREDRAW | CS_HREDRAW;
     windowClass.lpfnWndProc   = MainWindowCallback;
     windowClass.hInstance     = instance;
     windowClass.lpszClassName = "Handmade Windowclass";
@@ -169,14 +168,29 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
             // not necessary if we have WS_VISIBLE set.
             // ShowWindow(window_handle, show_cmd);
 
-            MSG message = {};
+            int x_offset = 0;
+            int y_offset = 0;
+            MSG message  = {};
             while (g_app_running) {
-                if (GetMessage(&message, 0, 0, 0) > 0) {
+                while (PeekMessage(&message, 0, 0, 0, PM_REMOVE)) {
+                    if (message.message == WM_QUIT) {
+                        g_app_running = false;
+                        break;
+                    }
                     TranslateMessage(&message);
                     DispatchMessage(&message);
-                } else {
-                    break;
                 }
+
+                RenderBitmap(x_offset, y_offset);
+
+                HDC  device_ctx = GetDC(window_handle);
+                RECT window_rect;
+                GetClientRect(window_handle, &window_rect);
+                int window_width  = window_rect.right - window_rect.left;
+                int window_height = window_rect.bottom - window_rect.top;
+                UpdateWindow(device_ctx, &window_rect, 0, 0, window_width, window_height);
+                ++x_offset;
+                ++y_offset;
             }
         }
     } else {
