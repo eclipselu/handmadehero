@@ -1,0 +1,59 @@
+Day 5
+============
+
+- C++, constructor/destructor, called when something is created and out of scope.
+- global variable clean up, clean up duplicated code.
+- Reason to have drawing in WM_PAINT:
+    https://hero.handmade.network/forums/game-discussion/t/8571-day4__why_is_stretchdibits_done_twice_and_what_triggers_wm_paint_#26968
+
+    > The main reason to have drawing in WM_PAINT is because that is only code executed when you are moving window or when you are resizing it. During these operations your main loop does not run as message processing loop enters separate modal loop.
+    > 
+    > If you don't care about redrawing in such case, then there's no need to use WM_PAINT and just having drawing in main loop is enough.
+    > 
+    > But if you want to handle such drawing, then having draw code in WM_PAINT and main loop is fine to have. It does not mean it will be always called twice. Simply in normal game run the main loop will do the drawing. And only when window is moved/resized/obscured then WM_PAINT draw kicks-in. You can issue InvalidateRect to force WM_PAINT from main code. But meh.. it does not really matter.
+
+- On StretchDIBits
+  - Fix one bug that destination and source are in the wrong order
+  - Making the back buffer fixed size, meaning the pixel count will be the same, but when we resize the window, StretchDIBits will possibly change the aspect ratio.
+
+- Stack grows downwards in memory, high address -> low address
+- Stack overflow when too much memory is used in stack space, e.g. 2MB local variable.
+
+
+
+Day 4
+============
+
+- Penalty on un-aligned access, if a value is 4 byte long, it should fall on the address of 4 byte boundaries like 0, 4, 8...
+- VirtualAlloc to alloc memory, 
+- Forgot to set bmiHeader.biPlanes to 1, the window did not display anything.
+- how to control the animation speed (fps)?
+- VirtualAlloc, VirtualFree and HeapAlloc are windows system calls, different from the C runtime library malloc, malloc will end up calling these functions under the hood.
+
+
+
+Day 3
+============
+
+- Things are better acquired and released in aggregate, instead of doing individually. Thinking of resource aquisition and release in waves.
+- `static` keyword in C
+    - global variable
+    - local persisting variable
+    - "private" functions in a translation unit (.c files)
+    - use macros to define better names for these 3 purposes
+- Handle `WM_RESIZE`
+    - `WM_RESIZE`: update back buffer
+    - `WM_PAINT`: use back buffer to draw the window.
+
+Some style preferences to be consistent onwards
+- variable names: `some_variable` instead of `someVariable`
+- global variables: use `g_` to indicate it's global, e.g. `g_app_running`
+- method: UpdateEntry instead of `update_entry`
+- function: return type in its own line
+
+
+Day 2
+============
+
+- Win32 programming
+    references: https://learn.microsoft.com/en-us/windows/win32/learnwin32/learn-to-program-for-windows 
