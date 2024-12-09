@@ -82,14 +82,7 @@ Win32ResizeDIBSection(Win32_Offscreen_Buffer* buffer, int width, int height) {
 
 internal void
 Win32DisplayBufferInWindow(
-    HDC                    device_ctx,
-    int                    window_width,
-    int                    window_height,
-    Win32_Offscreen_Buffer buffer,
-    int                    x,
-    int                    y,
-    int                    width,
-    int                    height) {
+    HDC device_ctx, int window_width, int window_height, Win32_Offscreen_Buffer buffer) {
 
     // stretch buffer memory given the buffer size to window size.
     // TODO: aspect ratio correction during resize
@@ -145,8 +138,7 @@ MainWindowCallback(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
 
         // redraw the window using the back buffer.
         Win32_Window_Dimension dimension = Win32GetWindowDimension(window);
-        Win32DisplayBufferInWindow(
-            device_ctx, dimension.width, dimension.height, g_backbuffer, x, y, width, height);
+        Win32DisplayBufferInWindow(device_ctx, dimension.width, dimension.height, g_backbuffer);
 
         EndPaint(window, &paint);
     } break;
@@ -211,14 +203,7 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
                 HDC                    device_ctx = GetDC(window_handle);
                 Win32_Window_Dimension dimension  = Win32GetWindowDimension(window_handle);
                 Win32DisplayBufferInWindow(
-                    device_ctx,
-                    dimension.width,
-                    dimension.height,
-                    g_backbuffer,
-                    0,
-                    0,
-                    dimension.width,
-                    dimension.height);
+                    device_ctx, dimension.width, dimension.height, g_backbuffer);
                 ReleaseDC(window_handle, device_ctx);
 
                 ++x_offset;
