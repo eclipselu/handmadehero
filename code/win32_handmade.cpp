@@ -41,6 +41,15 @@ XINPUT_SET_STATE(XInputSetStateStub) { return 0; }
 global x_input_set_state* XInputSetState_ = XInputSetStateStub;
 #define XInputSetState XInputSetState_
 
+internal void
+Win32LoadXInput(void) {
+    HMODULE XInputLib = LoadLibraryA("XInput1_3.dll");
+    if (XInputLib) {
+        XInputGetState_ = (x_input_get_state*)GetProcAddress(XInputLib, "XInputGetState");
+        XInputSetState_ = (x_input_set_state*)GetProcAddress(XInputLib, "XInputSetState");
+    }
+}
+
 internal Win32_Window_Dimension
 Win32GetWindowDimension(HWND window) {
     Win32_Window_Dimension dimension;
@@ -54,12 +63,12 @@ Win32GetWindowDimension(HWND window) {
 }
 
 internal void
-Win32RenderBitmap(Win32_Offscreen_Buffer buffer, int x_offset, int y_offset) {
-    uint8_t* row = (uint8_t*)buffer.memory;
-    for (int y = 0; y < buffer.height; ++y) {
+Win32RenderBitmap(Win32_Offscreen_Buffer* buffer, int x_offset, int y_offset) {
+    uint8_t* row = (uint8_t*)buffer->memory;
+    for (int y = 0; y < buffer->height; ++y) {
         uint32_t* pixel = (uint32_t*)row;
 
-        for (int x = 0; x < buffer.width; ++x) {
+        for (int x = 0; x < buffer->width; ++x) {
             // byte order: BB GG RR 00
 
             uint8_t blue  = (uint8_t)(y + y_offset);
@@ -69,7 +78,7 @@ Win32RenderBitmap(Win32_Offscreen_Buffer buffer, int x_offset, int y_offset) {
             ++pixel;
         }
 
-        row += buffer.bytes_per_pixel * buffer.width;
+        row += buffer->bytes_per_pixel * buffer->width;
     }
 }
 
@@ -136,6 +145,12 @@ MainWindowCallback(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
         PostQuitMessage(0);
     } break;
 
+    case WM_SYSKEYUP:
+    case WM_SYSKEYDOWN:
+    case WM_KEYUP:
+    case WM_KEYDOWN: {
+    } break;
+
     case WM_CLOSE: {
         OutputDebugStringA("WM_CLOSE\n");
         DestroyWindow(window);
@@ -173,6 +188,8 @@ MainWindowCallback(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
 
 int WINAPI
 WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cmd) {
+    Win32LoadXInput();
+
     WNDCLASSA windowClass = {};
 
     Win32ResizeDIBSection(&g_backbuffer, 1280, 720);
@@ -242,12 +259,33 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
 
                         if (a_button) {
                             OutputDebugStringA("Button A\n");
-                        } else if (b_button) {
+                        }
+                        if (b_button) {
                             OutputDebugStringA("Button B\n");
-                        } else if (x_button) {
+                        }
+                        if (x_button) {
                             OutputDebugStringA("Button X\n");
-                        } else if (y_button) {
+                        }
+                        if (y_button) {
                             OutputDebugStringA("Button Y\n");
+                        }
+
+                        /// NOTE: play around with input to manipulate the image displaying
+                        if (dpad_up) {
+                            --y_offset;
+                        }
+                        if (dpad_down) {
+                            ++y_offset;
+                        }
+                        if (dpad_left) {
+                            --x_offset;
+                        }
+                        if (dpad_right) {
+                            ++x_offset;
+                        }
+
+                        if (back) {
+                            g_app_running = false;
                         }
 
                     } else {
@@ -259,15 +297,15 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
                 vibration.wRightMotorSpeed = 32768;
                 XInputSetState(0, &vibration);
 
-                Win32RenderBitmap(g_backbuffer, x_offset, y_offset);
+                Win32RenderBitmap(&g_backbuffer, x_offset, y_offset);
 
                 HDC                    device_ctx = GetDC(window_handle);
                 Win32_Window_Dimension dimension  = Win32GetWindowDimension(window_handle);
                 Win32DisplayBufferInWindow(device_ctx, dimension.width, dimension.height, g_backbuffer);
                 ReleaseDC(window_handle, device_ctx);
 
-                ++x_offset;
-                ++y_offset;
+                // ++x_offset;
+                // ++y_offset;
             }
         }
     } else {
