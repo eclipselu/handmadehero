@@ -1,3 +1,11 @@
+Day 6 - Keyboard/Controller Input
+=================================
+
+- Controller input - XInput API
+- What happens if the xinput dll is not found?
+  - do we crash?
+  - we can use stub functions to not crash the program, try to load the function in the dll.
+
 Day 5
 ============
 

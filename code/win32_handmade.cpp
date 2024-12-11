@@ -1,5 +1,6 @@
 #include <cstdint>
 #include <windows.h>
+#include <xinput.h>
 
 #define global        static
 #define local_persist static
@@ -21,6 +22,24 @@ struct Win32_Window_Dimension {
 /// Global variables
 global bool                   g_app_running;
 global Win32_Offscreen_Buffer g_backbuffer;
+
+/// Dynamically loading XInput functions
+// NOTE: define x_input_get_state as a function type, same as XInputGetState's signature
+#define XINPUT_GET_STATE(name) DWORD WINAPI name(DWORD dwUserIndex, XINPUT_STATE* pState)
+typedef XINPUT_GET_STATE(x_input_get_state);
+
+// NOTE: define a stub function and make a global function pointer point to it
+XINPUT_GET_STATE(XInputGetStateStub) { return 0; }
+global x_input_get_state* XInputGetState_ = XInputGetStateStub;
+
+// NOTE: Make XInputGetState point to the global function pointer that points to stub
+#define XInputGetState XInputGetState_
+
+#define XINPUT_SET_STATE(name) DWORD WINAPI name(DWORD dwUserIndex, XINPUT_VIBRATION* pVibration)
+typedef XINPUT_SET_STATE(x_input_set_state);
+XINPUT_SET_STATE(XInputSetStateStub) { return 0; }
+global x_input_set_state* XInputSetState_ = XInputSetStateStub;
+#define XInputSetState XInputSetState_
 
 internal Win32_Window_Dimension
 Win32GetWindowDimension(HWND window) {
@@ -81,8 +100,7 @@ Win32ResizeDIBSection(Win32_Offscreen_Buffer* buffer, int width, int height) {
 }
 
 internal void
-Win32DisplayBufferInWindow(
-    HDC device_ctx, int window_width, int window_height, Win32_Offscreen_Buffer buffer) {
+Win32DisplayBufferInWindow(HDC device_ctx, int window_width, int window_height, Win32_Offscreen_Buffer buffer) {
 
     // stretch buffer memory given the buffer size to window size.
     // TODO: aspect ratio correction during resize
@@ -102,7 +120,7 @@ Win32DisplayBufferInWindow(
         SRCCOPY);
 }
 
-LRESULT CALLBACK
+internal LRESULT CALLBACK
 MainWindowCallback(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
     LRESULT result = 0;
 
@@ -198,12 +216,54 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
                     DispatchMessage(&message);
                 }
 
+                // deal with controller
+                for (DWORD controller_idx = 0; controller_idx < XUSER_MAX_COUNT; ++controller_idx) {
+                    XINPUT_STATE controller_state = {};
+                    if (XInputGetState(controller_idx, &controller_state) == ERROR_SUCCESS) {
+                        XINPUT_GAMEPAD* gamepad = &controller_state.Gamepad;
+
+                        bool dpad_up        = gamepad->wButtons & XINPUT_GAMEPAD_DPAD_UP;
+                        bool dpad_down      = gamepad->wButtons & XINPUT_GAMEPAD_DPAD_DOWN;
+                        bool dpad_left      = gamepad->wButtons & XINPUT_GAMEPAD_DPAD_LEFT;
+                        bool dpad_right     = gamepad->wButtons & XINPUT_GAMEPAD_DPAD_RIGHT;
+                        bool start          = gamepad->wButtons & XINPUT_GAMEPAD_START;
+                        bool back           = gamepad->wButtons & XINPUT_GAMEPAD_BACK;
+                        bool left_shoulder  = gamepad->wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER;
+                        bool right_shoulder = gamepad->wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER;
+                        bool a_button       = gamepad->wButtons & XINPUT_GAMEPAD_A;
+                        bool b_button       = gamepad->wButtons & XINPUT_GAMEPAD_B;
+                        bool x_button       = gamepad->wButtons & XINPUT_GAMEPAD_X;
+                        bool y_button       = gamepad->wButtons & XINPUT_GAMEPAD_Y;
+
+                        int16_t stick_lx = gamepad->sThumbLX;
+                        int16_t stick_ly = gamepad->sThumbLY;
+                        int16_t stick_rx = gamepad->sThumbRX;
+                        int16_t stick_ry = gamepad->sThumbRY;
+
+                        if (a_button) {
+                            OutputDebugStringA("Button A\n");
+                        } else if (b_button) {
+                            OutputDebugStringA("Button B\n");
+                        } else if (x_button) {
+                            OutputDebugStringA("Button X\n");
+                        } else if (y_button) {
+                            OutputDebugStringA("Button Y\n");
+                        }
+
+                    } else {
+                    }
+                }
+
+                XINPUT_VIBRATION vibration = {};
+                vibration.wLeftMotorSpeed  = 32768;
+                vibration.wRightMotorSpeed = 32768;
+                XInputSetState(0, &vibration);
+
                 Win32RenderBitmap(g_backbuffer, x_offset, y_offset);
 
                 HDC                    device_ctx = GetDC(window_handle);
                 Win32_Window_Dimension dimension  = Win32GetWindowDimension(window_handle);
-                Win32DisplayBufferInWindow(
-                    device_ctx, dimension.width, dimension.height, g_backbuffer);
+                Win32DisplayBufferInWindow(device_ctx, dimension.width, dimension.height, g_backbuffer);
                 ReleaseDC(window_handle, device_ctx);
 
                 ++x_offset;
