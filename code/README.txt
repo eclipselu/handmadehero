@@ -1,3 +1,15 @@
+Day 7 - DirectSound
+=================================
+
+- Create dsound, create primary/secondary buffers, set wave format.
+- DSound API is terrible!!!
+- Why do we need primary and secondary buffers?
+    - secondary buffer is what we need to play sound
+    - primary buffer seems a legacy thing, to set sound card in certain modes, to avoid resampling secondary buffer, 
+    - the only thing we need for primary boffer is to set format on the sound card.
+- Curious of how Core Audio API in macOS works
+
+
 Day 6 - Keyboard/Controller Input
 =================================
 

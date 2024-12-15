@@ -1,4 +1,5 @@
 #include <cstdint>
+#include <dsound.h>
 #include <windows.h>
 #include <xinput.h>
 
@@ -29,7 +30,7 @@ global Win32_Offscreen_Buffer g_backbuffer;
 typedef XINPUT_GET_STATE(x_input_get_state);
 
 // NOTE: define a stub function and make a global function pointer point to it
-XINPUT_GET_STATE(XInputGetStateStub) { return 0; }
+XINPUT_GET_STATE(XInputGetStateStub) { return ERROR_DEVICE_NOT_CONNECTED; }
 global x_input_get_state* XInputGetState_ = XInputGetStateStub;
 
 // NOTE: Make XInputGetState point to the global function pointer that points to stub
@@ -37,9 +38,12 @@ global x_input_get_state* XInputGetState_ = XInputGetStateStub;
 
 #define XINPUT_SET_STATE(name) DWORD WINAPI name(DWORD dwUserIndex, XINPUT_VIBRATION* pVibration)
 typedef XINPUT_SET_STATE(x_input_set_state);
-XINPUT_SET_STATE(XInputSetStateStub) { return 0; }
+XINPUT_SET_STATE(XInputSetStateStub) { return ERROR_DEVICE_NOT_CONNECTED; }
 global x_input_set_state* XInputSetState_ = XInputSetStateStub;
 #define XInputSetState XInputSetState_
+
+#define DSOUND_CREATE(name) HRESULT WINAPI name(LPCGUID pcGuidDevice, LPDIRECTSOUND* ppDS, LPUNKNOWN pUnkOuter)
+typedef DSOUND_CREATE(direct_sound_create);
 
 internal void
 Win32LoadXInput(void) {
@@ -47,6 +51,65 @@ Win32LoadXInput(void) {
     if (XInputLib) {
         XInputGetState_ = (x_input_get_state*)GetProcAddress(XInputLib, "XInputGetState");
         XInputSetState_ = (x_input_set_state*)GetProcAddress(XInputLib, "XInputSetState");
+    }
+}
+
+internal void
+Win32InitDSound(HWND window, int32_t samples_per_second, int32_t buffer_size) {
+    // NOTE: Load the library
+    HMODULE DSoundLib = LoadLibraryA("dsound.dll");
+    if (DSoundLib) {
+        // NOTE: Get a DirectSound object
+        direct_sound_create* DirectSoundCreate = (direct_sound_create*)GetProcAddress(DSoundLib, "DirectSoundCreate");
+        LPDIRECTSOUND        direct_sound;
+
+        if (DirectSoundCreate && SUCCEEDED(DirectSoundCreate(0, &direct_sound, 0))) {
+            WAVEFORMATEX wave_format    = {};
+            wave_format.wFormatTag      = WAVE_FORMAT_PCM;
+            wave_format.nChannels       = 2;
+            wave_format.nSamplesPerSec  = samples_per_second;
+            wave_format.wBitsPerSample  = 16;
+            wave_format.nBlockAlign     = wave_format.nChannels * wave_format.wBitsPerSample / 8;
+            wave_format.nAvgBytesPerSec = wave_format.nSamplesPerSec * wave_format.nBlockAlign;
+
+            if (SUCCEEDED(direct_sound->SetCooperativeLevel(window, DSSCL_PRIORITY))) {
+                // NOTE: Create a primary buffer (old school way of doing sound stuff, still need to set the mode)
+                //
+                // When creating a primary buffer, applications must set the dwBufferBytes member to zero. DirectSound
+                // will determine the best buffer size for the particular sound device in use
+                DSBUFFERDESC buffer_desc = {};
+                buffer_desc.dwFlags      = DSBCAPS_PRIMARYBUFFER;
+                buffer_desc.dwSize       = sizeof(buffer_desc);
+
+                LPDIRECTSOUNDBUFFER primary_buffer;
+                if (SUCCEEDED(direct_sound->CreateSoundBuffer(&buffer_desc, &primary_buffer, 0))) {
+                    if (SUCCEEDED(primary_buffer->SetFormat(&wave_format))) {
+                        OutputDebugStringA("Primary buffer format was set\n");
+                    } else {
+                        OutputDebugStringA("Failed to set primary buffer format\n");
+                    }
+
+                } else {
+                    // TODO: diagnostic
+                }
+            }
+
+            // NOTE: Create a secondary buffer
+            DSBUFFERDESC buffer_desc  = {};
+            buffer_desc.dwFlags       = 0;
+            buffer_desc.dwSize        = sizeof(buffer_desc);
+            buffer_desc.dwBufferBytes = buffer_size;
+            buffer_desc.lpwfxFormat   = &wave_format;
+
+            LPDIRECTSOUNDBUFFER secondary_buffer;
+            if (SUCCEEDED(direct_sound->CreateSoundBuffer(&buffer_desc, &secondary_buffer, 0))) {
+                OutputDebugStringA("Secondary buffer was created\n");
+            } else {
+                OutputDebugStringA("failed to create Secondary buffer\n");
+            }
+        } else {
+            // TODO: diagnostics
+        }
     }
 }
 
@@ -105,7 +168,8 @@ Win32ResizeDIBSection(Win32_Offscreen_Buffer* buffer, int width, int height) {
     buffer->info.bmiHeader.biCompression = BI_RGB;
 
     int bitmap_memory_size = width * height * buffer->bytes_per_pixel;
-    buffer->memory         = VirtualAlloc(0, bitmap_memory_size, MEM_COMMIT, PAGE_READWRITE);
+    // need both reserve and commit
+    buffer->memory = VirtualAlloc(0, bitmap_memory_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 }
 
 internal void
@@ -149,6 +213,11 @@ MainWindowCallback(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
     case WM_SYSKEYDOWN:
     case WM_KEYUP:
     case WM_KEYDOWN: {
+        uint32_t vk_code      = wparam;
+        bool     alt_key_down = (lparam & (1 << 29)) != 0;
+        if (vk_code == VK_F4 && alt_key_down) {
+            g_app_running = false;
+        }
     } break;
 
     case WM_CLOSE: {
@@ -220,9 +289,13 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
             // not necessary if we have WS_VISIBLE set.
             // ShowWindow(window_handle, show_cmd);
 
-            int x_offset = 0;
-            int y_offset = 0;
-            MSG message  = {};
+            HDC device_ctx = GetDC(window_handle);
+            int x_offset   = 0;
+            int y_offset   = 0;
+            MSG message    = {};
+
+            Win32InitDSound(window_handle, 48000, 48000 * sizeof(int16_t) * 2);
+
             while (g_app_running) {
                 while (PeekMessage(&message, 0, 0, 0, PM_REMOVE)) {
                     if (message.message == WM_QUIT) {
@@ -299,8 +372,7 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
 
                 Win32RenderBitmap(&g_backbuffer, x_offset, y_offset);
 
-                HDC                    device_ctx = GetDC(window_handle);
-                Win32_Window_Dimension dimension  = Win32GetWindowDimension(window_handle);
+                Win32_Window_Dimension dimension = Win32GetWindowDimension(window_handle);
                 Win32DisplayBufferInWindow(device_ctx, dimension.width, dimension.height, g_backbuffer);
                 ReleaseDC(window_handle, device_ctx);
 
