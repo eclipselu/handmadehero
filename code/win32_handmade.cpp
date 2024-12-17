@@ -268,7 +268,6 @@ TestDSoundSquareWaveOutput(int samples_per_second, int bytes_per_sample, int sec
     int      square_wave_period      = samples_per_second / tone_hz; // how many samples do we need to fill in a pattern
     int      half_square_wave_period = square_wave_period / 2;       // flip every half cycle
 
-    g_dsound_secondary_buffer->Play(0, 0, DSBPLAY_LOOPING);
     // both cursors are in bytes
     DWORD   play_cursor;
     DWORD   write_cursor;
@@ -301,7 +300,7 @@ TestDSoundSquareWaveOutput(int samples_per_second, int bytes_per_sample, int sec
             DWORD    region1_sample_count = region1_size / bytes_per_sample;
             int16_t* sample_out           = (int16_t*)region1;
             for (DWORD sample_idx = 0; sample_idx < region1_sample_count; ++sample_idx) {
-                int16_t sample_val = (running_sample_idx / half_square_wave_period) % 2 ? tone_volume : -tone_volume;
+                int16_t sample_val = ((running_sample_idx / half_square_wave_period) % 2) ? tone_volume : -tone_volume;
                 ++running_sample_idx;
 
                 // left
@@ -314,7 +313,7 @@ TestDSoundSquareWaveOutput(int samples_per_second, int bytes_per_sample, int sec
             DWORD region2_sample_count = region2_size / bytes_per_sample;
             sample_out                 = (int16_t*)region2;
             for (DWORD sample_idx = 0; sample_idx < region2_sample_count; ++sample_idx) {
-                int16_t sample_val = (running_sample_idx / half_square_wave_period) % 2 ? tone_volume : -tone_volume;
+                int16_t sample_val = ((running_sample_idx / half_square_wave_period) % 2) ? tone_volume : -tone_volume;
                 ++running_sample_idx;
 
                 // left
@@ -325,9 +324,10 @@ TestDSoundSquareWaveOutput(int samples_per_second, int bytes_per_sample, int sec
                 ++sample_out;
             }
 
-            g_dsound_secondary_buffer->Unlock(&region1, region1_size, &region2, region2_size);
+            g_dsound_secondary_buffer->Unlock(region1, region1_size, region2, region2_size);
         }
     }
+    g_dsound_secondary_buffer->Play(0, 0, DSBPLAY_LOOPING);
 }
 
 int WINAPI
@@ -373,7 +373,6 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
             int samples_per_second    = 48000;
             int bytes_per_sample      = sizeof(int16_t) * 2; // 2 channels, one channel is 16 bits
             int secondary_buffer_size = samples_per_second * bytes_per_sample;
-            int tone_hz               = 256; // piano middle C is 261.63Hz
             Win32InitDSound(window_handle, samples_per_second, secondary_buffer_size);
 
             while (g_app_running) {
