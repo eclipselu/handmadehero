@@ -1,3 +1,21 @@
+Day 8 - Writing a Square Wave to DirectSound
+============================================
+
+- Lock the secondary buffer
+  - Needed for writing to the buffer
+  - depending on where we want to lock and the size, we may get 1 or 2 regions
+
+
+NOTE:
+┌─┆─┐  ┌─┆─┐  ┌──┐  ┌──┐  ┌──┐  ┌──┐  ┆┌──┐  ┌──┐  ┌──┐
+┘ ┆ └──┘ ┆ └──┘  └──┘  └──┘  └──┘  └──┆┘  └──┘  └──┘  └──
+  <-    ->
+   pattern
+
+we flip every half pattern
+
+
+
 Day 7 - DirectSound
 =================================
 

@@ -23,6 +23,7 @@ struct Win32_Window_Dimension {
 /// Global variables
 global bool                   g_app_running;
 global Win32_Offscreen_Buffer g_backbuffer;
+global LPDIRECTSOUNDBUFFER    g_dsound_secondary_buffer;
 
 /// Dynamically loading XInput functions
 // NOTE: define x_input_get_state as a function type, same as XInputGetState's signature
@@ -101,8 +102,7 @@ Win32InitDSound(HWND window, int32_t samples_per_second, int32_t buffer_size) {
             buffer_desc.dwBufferBytes = buffer_size;
             buffer_desc.lpwfxFormat   = &wave_format;
 
-            LPDIRECTSOUNDBUFFER secondary_buffer;
-            if (SUCCEEDED(direct_sound->CreateSoundBuffer(&buffer_desc, &secondary_buffer, 0))) {
+            if (SUCCEEDED(direct_sound->CreateSoundBuffer(&buffer_desc, &g_dsound_secondary_buffer, 0))) {
                 OutputDebugStringA("Secondary buffer was created\n");
             } else {
                 OutputDebugStringA("failed to create Secondary buffer\n");
@@ -255,6 +255,81 @@ MainWindowCallback(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
     return result;
 }
 
+internal void
+TestDSoundSquareWaveOutput(int samples_per_second, int bytes_per_sample, int secondary_buffer_size) {
+    // NOTE: test DirectSound output
+    // Since we have 2 channels, and each bits per sample is 16, the buffer will look like:
+    // [Left, Right] [Left, Right] ...
+    // Left or Right has 16 bits, each left right tuple is called a sample
+
+    int      tone_hz                 = 256; // how many repeatable patterns, this is middle C in piano 261.6 hz
+    int16_t  tone_volume             = 6000;
+    uint32_t running_sample_idx      = 0;
+    int      square_wave_period      = samples_per_second / tone_hz; // how many samples do we need to fill in a pattern
+    int      half_square_wave_period = square_wave_period / 2;       // flip every half cycle
+
+    g_dsound_secondary_buffer->Play(0, 0, DSBPLAY_LOOPING);
+    // both cursors are in bytes
+    DWORD   play_cursor;
+    DWORD   write_cursor;
+    HRESULT hr = g_dsound_secondary_buffer->GetCurrentPosition(&play_cursor, &write_cursor);
+    if (SUCCEEDED(hr)) {
+        // where do we want start to lock
+        DWORD lock_cursor = running_sample_idx * bytes_per_sample % secondary_buffer_size;
+        DWORD bytes_to_write;
+        if (lock_cursor < play_cursor) {
+            // [... lock xxx play ... ]
+            bytes_to_write = play_cursor - lock_cursor;
+        } else if (lock_cursor > play_cursor) {
+            // [xxx play ... lock xxx ]
+            bytes_to_write = secondary_buffer_size - lock_cursor;
+            bytes_to_write += play_cursor;
+        } else {
+            // lock_cursor == play_cursor
+            bytes_to_write = play_cursor - lock_cursor;
+        }
+
+        VOID *region1, *region2;
+        DWORD region1_size, region2_size;
+        // lock
+        HRESULT hr = g_dsound_secondary_buffer->Lock(
+            lock_cursor, bytes_to_write, &region1, &region1_size, &region2, &region2_size, 0);
+        if (SUCCEEDED(hr)) {
+            // TODO: assert region sizes
+
+            // trying to write to the locked regions
+            DWORD    region1_sample_count = region1_size / bytes_per_sample;
+            int16_t* sample_out           = (int16_t*)region1;
+            for (DWORD sample_idx = 0; sample_idx < region1_sample_count; ++sample_idx) {
+                int16_t sample_val = (running_sample_idx / half_square_wave_period) % 2 ? tone_volume : -tone_volume;
+                ++running_sample_idx;
+
+                // left
+                *sample_out = sample_val;
+                ++sample_out;
+                // right
+                *sample_out = sample_val;
+                ++sample_out;
+            }
+            DWORD region2_sample_count = region2_size / bytes_per_sample;
+            sample_out                 = (int16_t*)region2;
+            for (DWORD sample_idx = 0; sample_idx < region2_sample_count; ++sample_idx) {
+                int16_t sample_val = (running_sample_idx / half_square_wave_period) % 2 ? tone_volume : -tone_volume;
+                ++running_sample_idx;
+
+                // left
+                *sample_out = sample_val;
+                ++sample_out;
+                // right
+                *sample_out = sample_val;
+                ++sample_out;
+            }
+
+            g_dsound_secondary_buffer->Unlock(&region1, region1_size, &region2, region2_size);
+        }
+    }
+}
+
 int WINAPI
 WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cmd) {
     Win32LoadXInput();
@@ -294,7 +369,12 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
             int y_offset   = 0;
             MSG message    = {};
 
-            Win32InitDSound(window_handle, 48000, 48000 * sizeof(int16_t) * 2);
+            // sound
+            int samples_per_second    = 48000;
+            int bytes_per_sample      = sizeof(int16_t) * 2; // 2 channels, one channel is 16 bits
+            int secondary_buffer_size = samples_per_second * bytes_per_sample;
+            int tone_hz               = 256; // piano middle C is 261.63Hz
+            Win32InitDSound(window_handle, samples_per_second, secondary_buffer_size);
 
             while (g_app_running) {
                 while (PeekMessage(&message, 0, 0, 0, PM_REMOVE)) {
@@ -370,14 +450,16 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
                 vibration.wRightMotorSpeed = 32768;
                 XInputSetState(0, &vibration);
 
+                // Test dsound output
+                TestDSoundSquareWaveOutput(samples_per_second, bytes_per_sample, secondary_buffer_size);
+
                 Win32RenderBitmap(&g_backbuffer, x_offset, y_offset);
 
                 Win32_Window_Dimension dimension = Win32GetWindowDimension(window_handle);
                 Win32DisplayBufferInWindow(device_ctx, dimension.width, dimension.height, g_backbuffer);
-                ReleaseDC(window_handle, device_ctx);
 
-                // ++x_offset;
-                // ++y_offset;
+                ++x_offset;
+                ++y_offset;
             }
         }
     } else {
