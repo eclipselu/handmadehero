@@ -1,3 +1,13 @@
+Day 9 - Sine Wave sound
+=======================
+
+- [Homework] Read about Floating point numbers
+  - CSAPP
+  - https://float.exposed/0x44bf9400
+- Sine wave, pretty straight forward, the sample value is a function of running index, using sine.
+- Currently it's not smooth, sounds like there's a blunt transition at period end.
+
+
 Day 8 - Writing a Square Wave to DirectSound
 ============================================
 

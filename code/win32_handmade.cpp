@@ -1,11 +1,18 @@
+#include <cmath>
 #include <cstdint>
 #include <dsound.h>
+#include <math.h>
 #include <windows.h>
 #include <xinput.h>
+
+#define PI 3.14159265358979323846
 
 #define global        static
 #define local_persist static
 #define internal      static
+
+typedef float  float32_t;
+typedef double float64_t;
 
 struct Win32_Offscreen_Buffer {
     BITMAPINFO info;
@@ -256,17 +263,16 @@ MainWindowCallback(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
 }
 
 internal void
-TestDSoundSquareWaveOutput(int samples_per_second, int bytes_per_sample, int secondary_buffer_size) {
+TestDSoundWaveOutput(int samples_per_second, int bytes_per_sample, int secondary_buffer_size) {
     // NOTE: test DirectSound output
     // Since we have 2 channels, and each bits per sample is 16, the buffer will look like:
     // [Left, Right] [Left, Right] ...
     // Left or Right has 16 bits, each left right tuple is called a sample
 
-    int      tone_hz                 = 256; // how many repeatable patterns, this is middle C in piano 261.6 hz
-    int16_t  tone_volume             = 6000;
-    uint32_t running_sample_idx      = 0;
-    int      square_wave_period      = samples_per_second / tone_hz; // how many samples do we need to fill in a pattern
-    int      half_square_wave_period = square_wave_period / 2;       // flip every half cycle
+    int      tone_hz            = 256; // how many repeatable patterns, this is middle C in piano 261.6 hz
+    int16_t  tone_volume        = 6000;
+    uint32_t running_sample_idx = 0;
+    int      wave_period        = samples_per_second / tone_hz; // how many samples do we need to fill in a pattern
 
     // both cursors are in bytes
     DWORD   play_cursor;
@@ -300,7 +306,9 @@ TestDSoundSquareWaveOutput(int samples_per_second, int bytes_per_sample, int sec
             DWORD    region1_sample_count = region1_size / bytes_per_sample;
             int16_t* sample_out           = (int16_t*)region1;
             for (DWORD sample_idx = 0; sample_idx < region1_sample_count; ++sample_idx) {
-                int16_t sample_val = ((running_sample_idx / half_square_wave_period) % 2) ? tone_volume : -tone_volume;
+                float32_t t          = 2.0 * PI * running_sample_idx / (float32_t)wave_period;
+                int16_t   sample_val = (int16_t)(sin(t) * tone_volume);
+
                 ++running_sample_idx;
 
                 // left
@@ -313,7 +321,9 @@ TestDSoundSquareWaveOutput(int samples_per_second, int bytes_per_sample, int sec
             DWORD region2_sample_count = region2_size / bytes_per_sample;
             sample_out                 = (int16_t*)region2;
             for (DWORD sample_idx = 0; sample_idx < region2_sample_count; ++sample_idx) {
-                int16_t sample_val = ((running_sample_idx / half_square_wave_period) % 2) ? tone_volume : -tone_volume;
+                float32_t t          = 2.0 * PI * running_sample_idx / (float32_t)wave_period;
+                int16_t   sample_val = (int16_t)(sin(t) * tone_volume);
+
                 ++running_sample_idx;
 
                 // left
@@ -450,7 +460,7 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
                 XInputSetState(0, &vibration);
 
                 // Test dsound output
-                TestDSoundSquareWaveOutput(samples_per_second, bytes_per_sample, secondary_buffer_size);
+                TestDSoundWaveOutput(samples_per_second, bytes_per_sample, secondary_buffer_size);
 
                 Win32RenderBitmap(&g_backbuffer, x_offset, y_offset);
 
