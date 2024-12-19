@@ -450,11 +450,6 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
                     }
                 }
 
-                XINPUT_VIBRATION vibration = {};
-                vibration.wLeftMotorSpeed  = 32768;
-                vibration.wRightMotorSpeed = 32768;
-                XInputSetState(0, &vibration);
-
                 // Test dsound output
                 // both cursors are in bytes
                 DWORD   play_cursor;
