@@ -262,83 +262,65 @@ MainWindowCallback(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
     return result;
 }
 
+struct win32_sound_output {
+    int      samples_per_second;
+    int      tone_hz;
+    int16_t  tone_volume;
+    uint32_t running_sample_idx;
+    int      wave_period;
+    int      bytes_per_sample;
+    int      secondary_buffer_size;
+};
+
 internal void
-TestDSoundWaveOutput(int samples_per_second, int bytes_per_sample, int secondary_buffer_size) {
-    // NOTE: test DirectSound output
-    // Since we have 2 channels, and each bits per sample is 16, the buffer will look like:
-    // [Left, Right] [Left, Right] ...
-    // Left or Right has 16 bits, each left right tuple is called a sample
-
-    int      tone_hz            = 256; // how many repeatable patterns, this is middle C in piano 261.6 hz
-    int16_t  tone_volume        = 6000;
-    uint32_t running_sample_idx = 0;
-    int      wave_period        = samples_per_second / tone_hz; // how many samples do we need to fill in a pattern
-
-    // both cursors are in bytes
-    DWORD   play_cursor;
-    DWORD   write_cursor;
-    HRESULT hr = g_dsound_secondary_buffer->GetCurrentPosition(&play_cursor, &write_cursor);
+Win32FillSoundBuffer(win32_sound_output* sound_output, DWORD byte_to_lock, DWORD bytes_to_write) {
+    VOID *region1, *region2;
+    DWORD region1_size, region2_size;
+    // lock
+    HRESULT hr = g_dsound_secondary_buffer->Lock(
+        byte_to_lock, bytes_to_write, &region1, &region1_size, &region2, &region2_size, 0);
     if (SUCCEEDED(hr)) {
-        // where do we want start to lock
-        DWORD lock_cursor = running_sample_idx * bytes_per_sample % secondary_buffer_size;
-        DWORD bytes_to_write;
-        if (lock_cursor < play_cursor) {
-            // [... lock xxx play ... ]
-            bytes_to_write = play_cursor - lock_cursor;
-        } else if (lock_cursor > play_cursor) {
-            // [xxx play ... lock xxx ]
-            bytes_to_write = secondary_buffer_size - lock_cursor;
-            bytes_to_write += play_cursor;
-        } else {
-            // lock_cursor == play_cursor
-            bytes_to_write = play_cursor - lock_cursor;
+        // TODO: assert region sizes
+
+        // trying to write to the locked regions
+        DWORD    region1_sample_count = region1_size / sound_output->bytes_per_sample;
+        int16_t* sample_out           = (int16_t*)region1;
+        for (DWORD sample_idx = 0; sample_idx < region1_sample_count; ++sample_idx) {
+            float32_t t          = 2.0 * PI * sound_output->running_sample_idx / (float32_t)sound_output->wave_period;
+            int16_t   sample_val = (int16_t)(sin(t) * sound_output->tone_volume);
+
+            ++sound_output->running_sample_idx;
+
+            // left
+            *sample_out = sample_val;
+            ++sample_out;
+            // right
+            *sample_out = sample_val;
+            ++sample_out;
+        }
+        DWORD region2_sample_count = region2_size / sound_output->bytes_per_sample;
+        sample_out                 = (int16_t*)region2;
+        for (DWORD sample_idx = 0; sample_idx < region2_sample_count; ++sample_idx) {
+            float32_t t          = 2.0 * PI * sound_output->running_sample_idx / (float32_t)sound_output->wave_period;
+            int16_t   sample_val = (int16_t)(sin(t) * sound_output->tone_volume);
+
+            ++sound_output->running_sample_idx;
+
+            // left
+            *sample_out = sample_val;
+            ++sample_out;
+            // right
+            *sample_out = sample_val;
+            ++sample_out;
         }
 
-        VOID *region1, *region2;
-        DWORD region1_size, region2_size;
-        // lock
-        HRESULT hr = g_dsound_secondary_buffer->Lock(
-            lock_cursor, bytes_to_write, &region1, &region1_size, &region2, &region2_size, 0);
-        if (SUCCEEDED(hr)) {
-            // TODO: assert region sizes
-
-            // trying to write to the locked regions
-            DWORD    region1_sample_count = region1_size / bytes_per_sample;
-            int16_t* sample_out           = (int16_t*)region1;
-            for (DWORD sample_idx = 0; sample_idx < region1_sample_count; ++sample_idx) {
-                float32_t t          = 2.0 * PI * running_sample_idx / (float32_t)wave_period;
-                int16_t   sample_val = (int16_t)(sin(t) * tone_volume);
-
-                ++running_sample_idx;
-
-                // left
-                *sample_out = sample_val;
-                ++sample_out;
-                // right
-                *sample_out = sample_val;
-                ++sample_out;
-            }
-            DWORD region2_sample_count = region2_size / bytes_per_sample;
-            sample_out                 = (int16_t*)region2;
-            for (DWORD sample_idx = 0; sample_idx < region2_sample_count; ++sample_idx) {
-                float32_t t          = 2.0 * PI * running_sample_idx / (float32_t)wave_period;
-                int16_t   sample_val = (int16_t)(sin(t) * tone_volume);
-
-                ++running_sample_idx;
-
-                // left
-                *sample_out = sample_val;
-                ++sample_out;
-                // right
-                *sample_out = sample_val;
-                ++sample_out;
-            }
-
-            g_dsound_secondary_buffer->Unlock(region1, region1_size, region2, region2_size);
-        }
+        g_dsound_secondary_buffer->Unlock(region1, region1_size, region2, region2_size);
     }
-    g_dsound_secondary_buffer->Play(0, 0, DSBPLAY_LOOPING);
 }
+
+// internal void
+// TestDSoundWaveOutput(int samples_per_second, int bytes_per_sample, int secondary_buffer_size) {
+//     }
 
 int WINAPI
 WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cmd) {
@@ -380,10 +362,24 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
             MSG message    = {};
 
             // sound
-            int samples_per_second    = 48000;
-            int bytes_per_sample      = sizeof(int16_t) * 2; // 2 channels, one channel is 16 bits
-            int secondary_buffer_size = samples_per_second * bytes_per_sample;
-            Win32InitDSound(window_handle, samples_per_second, secondary_buffer_size);
+            // Since we have 2 channels, and each bits per sample is 16, the buffer will look like:
+            // [Left, Right] [Left, Right] ...
+            // Left or Right has 16 bits, each left right tuple is called a sample
+
+            win32_sound_output sound_output = {};
+            sound_output.samples_per_second = 48000;
+            // how many repeatable patterns, this is middle C in piano 261.6 hz
+            sound_output.tone_hz            = 256;
+            sound_output.tone_volume        = 6000;
+            sound_output.running_sample_idx = 0;
+            sound_output.wave_period        = sound_output.samples_per_second /
+                                       sound_output.tone_hz; // how many samples do we need to fill in a pattern
+            sound_output.bytes_per_sample      = sizeof(int16_t) * 2; // 2 channels, one channel is 16 bits
+            sound_output.secondary_buffer_size = sound_output.samples_per_second * sound_output.bytes_per_sample;
+
+            Win32InitDSound(window_handle, sound_output.samples_per_second, sound_output.secondary_buffer_size);
+            Win32FillSoundBuffer(&sound_output, 0, sound_output.secondary_buffer_size);
+            g_dsound_secondary_buffer->Play(0, 0, DSBPLAY_LOOPING);
 
             while (g_app_running) {
                 while (PeekMessage(&message, 0, 0, 0, PM_REMOVE)) {
@@ -460,7 +456,28 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
                 XInputSetState(0, &vibration);
 
                 // Test dsound output
-                TestDSoundWaveOutput(samples_per_second, bytes_per_sample, secondary_buffer_size);
+                // both cursors are in bytes
+                DWORD   play_cursor;
+                DWORD   write_cursor;
+                HRESULT hr = g_dsound_secondary_buffer->GetCurrentPosition(&play_cursor, &write_cursor);
+                if (SUCCEEDED(hr)) {
+                    // where do we want start to lock
+                    DWORD byte_to_lock = (sound_output.running_sample_idx * sound_output.bytes_per_sample) %
+                                         sound_output.secondary_buffer_size;
+                    DWORD bytes_to_write = 0;
+                    if (byte_to_lock < play_cursor) {
+                        // [... lock xxx play ... ]
+                        bytes_to_write = play_cursor - byte_to_lock;
+                    } else if (byte_to_lock > play_cursor) {
+                        // [xxx play ... lock xxx ]
+                        bytes_to_write = sound_output.secondary_buffer_size - byte_to_lock;
+                        bytes_to_write += play_cursor;
+                    } else {
+                        // we caught up with play_cursor, don't write any bytes
+                        bytes_to_write = 0;
+                    }
+                    Win32FillSoundBuffer(&sound_output, byte_to_lock, bytes_to_write);
+                }
 
                 Win32RenderBitmap(&g_backbuffer, x_offset, y_offset);
 

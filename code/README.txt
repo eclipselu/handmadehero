@@ -6,6 +6,9 @@ Day 9 - Sine Wave sound
   - https://float.exposed/0x44bf9400
 - Sine wave, pretty straight forward, the sample value is a function of running index, using sine.
 - Currently it's not smooth, sounds like there's a blunt transition at period end.
+- Fixed in a followup commit, the bug is that byte to write should be 0 when it's catching the play cursor.
+  - initialize variable to 0
+  - turn the warning level on in complier options.
 
 
 Day 8 - Writing a Square Wave to DirectSound
