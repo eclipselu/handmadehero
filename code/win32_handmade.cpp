@@ -415,19 +415,6 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
                         int16_t stick_rx = gamepad->sThumbRX;
                         int16_t stick_ry = gamepad->sThumbRY;
 
-                        if (a_button) {
-                            OutputDebugStringA("Button A\n");
-                        }
-                        if (b_button) {
-                            OutputDebugStringA("Button B\n");
-                        }
-                        if (x_button) {
-                            OutputDebugStringA("Button X\n");
-                        }
-                        if (y_button) {
-                            OutputDebugStringA("Button Y\n");
-                        }
-
                         /// NOTE: play around with input to manipulate the image displaying
                         if (dpad_up) {
                             --y_offset;
@@ -440,6 +427,15 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
                         }
                         if (dpad_right) {
                             ++x_offset;
+                        }
+
+                        if (a_button) {
+                            sound_output.tone_hz     = 512;
+                            sound_output.wave_period = sound_output.samples_per_second / sound_output.tone_hz;
+                        }
+                        if (b_button) {
+                            sound_output.tone_hz     = 256;
+                            sound_output.wave_period = sound_output.samples_per_second / sound_output.tone_hz;
                         }
 
                         if (back) {
@@ -460,16 +456,13 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
                     DWORD byte_to_lock = (sound_output.running_sample_idx * sound_output.bytes_per_sample) %
                                          sound_output.secondary_buffer_size;
                     DWORD bytes_to_write = 0;
-                    if (byte_to_lock < play_cursor) {
-                        // [... lock xxx play ... ]
-                        bytes_to_write = play_cursor - byte_to_lock;
-                    } else if (byte_to_lock > play_cursor) {
+                    if (byte_to_lock > play_cursor) {
                         // [xxx play ... lock xxx ]
                         bytes_to_write = sound_output.secondary_buffer_size - byte_to_lock;
                         bytes_to_write += play_cursor;
                     } else {
-                        // we caught up with play_cursor, don't write any bytes
-                        bytes_to_write = 0;
+                        // [... lock xxx play ... ]
+                        bytes_to_write = play_cursor - byte_to_lock;
                     }
                     Win32FillSoundBuffer(&sound_output, byte_to_lock, bytes_to_write);
                 }
