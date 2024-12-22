@@ -256,7 +256,7 @@ MainWindowCallback(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
         // OutputDebugStringA("default\n");
         // default window callback
         // handles WM_CLOSE -> destroy the window
-        result = DefWindowProc(window, message, wparam, lparam);
+        result = DefWindowProcA(window, message, wparam, lparam);
     } break;
     }
     return result;
@@ -419,19 +419,9 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
                         int16_t stick_rx = gamepad->sThumbRX;
                         int16_t stick_ry = gamepad->sThumbRY;
 
-                        /// NOTE: play around with input to manipulate the image displaying
-                        if (dpad_up) {
-                            --y_offset;
-                        }
-                        if (dpad_down) {
-                            ++y_offset;
-                        }
-                        if (dpad_left) {
-                            --x_offset;
-                        }
-                        if (dpad_right) {
-                            ++x_offset;
-                        }
+                        // NOTE: play around with input to manipulate the image displaying
+                        x_offset += stick_lx >> 12;
+                        y_offset += stick_ly >> 12;
 
                         // NOTE: make sure tone_hz cannot be 0
                         sound_output.tone_hz     = 512 + (int16_t)(256.0f * (float32_t)stick_ly / 30000.0f + 1.0);
@@ -474,8 +464,8 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
                 Win32_Window_Dimension dimension = Win32GetWindowDimension(window_handle);
                 Win32DisplayBufferInWindow(device_ctx, dimension.width, dimension.height, g_backbuffer);
 
-                ++x_offset;
-                ++y_offset;
+                // ++x_offset;
+                // ++y_offset;
             }
         }
     } else {
