@@ -262,7 +262,7 @@ MainWindowCallback(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
     return result;
 }
 
-struct win32_sound_output {
+struct Win32_Sound_Output {
     int      samples_per_second;
     int      tone_hz;
     int16_t  tone_volume;
@@ -270,10 +270,13 @@ struct win32_sound_output {
     int      wave_period;
     int      bytes_per_sample;
     int      secondary_buffer_size;
+
+    float32_t t_sine;
+    int       latency_sample_count;
 };
 
 internal void
-Win32FillSoundBuffer(win32_sound_output* sound_output, DWORD byte_to_lock, DWORD bytes_to_write) {
+Win32FillSoundBuffer(Win32_Sound_Output* sound_output, DWORD byte_to_lock, DWORD bytes_to_write) {
     VOID *region1, *region2;
     DWORD region1_size, region2_size;
     // lock
@@ -286,10 +289,7 @@ Win32FillSoundBuffer(win32_sound_output* sound_output, DWORD byte_to_lock, DWORD
         DWORD    region1_sample_count = region1_size / sound_output->bytes_per_sample;
         int16_t* sample_out           = (int16_t*)region1;
         for (DWORD sample_idx = 0; sample_idx < region1_sample_count; ++sample_idx) {
-            float32_t t          = 2.0 * PI * sound_output->running_sample_idx / (float32_t)sound_output->wave_period;
-            int16_t   sample_val = (int16_t)(sin(t) * sound_output->tone_volume);
-
-            ++sound_output->running_sample_idx;
+            int16_t sample_val = (int16_t)(sin(sound_output->t_sine) * sound_output->tone_volume);
 
             // left
             *sample_out = sample_val;
@@ -297,14 +297,14 @@ Win32FillSoundBuffer(win32_sound_output* sound_output, DWORD byte_to_lock, DWORD
             // right
             *sample_out = sample_val;
             ++sample_out;
+
+            ++sound_output->running_sample_idx;
+            sound_output->t_sine += 2.0 * PI * 1.0 / (float32_t)sound_output->wave_period;
         }
         DWORD region2_sample_count = region2_size / sound_output->bytes_per_sample;
         sample_out                 = (int16_t*)region2;
         for (DWORD sample_idx = 0; sample_idx < region2_sample_count; ++sample_idx) {
-            float32_t t          = 2.0 * PI * sound_output->running_sample_idx / (float32_t)sound_output->wave_period;
-            int16_t   sample_val = (int16_t)(sin(t) * sound_output->tone_volume);
-
-            ++sound_output->running_sample_idx;
+            int16_t sample_val = (int16_t)(sin(sound_output->t_sine) * sound_output->tone_volume);
 
             // left
             *sample_out = sample_val;
@@ -312,6 +312,9 @@ Win32FillSoundBuffer(win32_sound_output* sound_output, DWORD byte_to_lock, DWORD
             // right
             *sample_out = sample_val;
             ++sample_out;
+
+            ++sound_output->running_sample_idx;
+            sound_output->t_sine += 2.0 * PI * 1.0 / (float32_t)sound_output->wave_period;
         }
 
         g_dsound_secondary_buffer->Unlock(region1, region1_size, region2, region2_size);
@@ -366,7 +369,7 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
             // [Left, Right] [Left, Right] ...
             // Left or Right has 16 bits, each left right tuple is called a sample
 
-            win32_sound_output sound_output = {};
+            Win32_Sound_Output sound_output = {};
             sound_output.samples_per_second = 48000;
             // how many repeatable patterns, this is middle C in piano 261.6 hz
             sound_output.tone_hz            = 256;
@@ -376,6 +379,7 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
                                        sound_output.tone_hz; // how many samples do we need to fill in a pattern
             sound_output.bytes_per_sample      = sizeof(int16_t) * 2; // 2 channels, one channel is 16 bits
             sound_output.secondary_buffer_size = sound_output.samples_per_second * sound_output.bytes_per_sample;
+            sound_output.latency_sample_count  = sound_output.samples_per_second / 15;
 
             Win32InitDSound(window_handle, sound_output.samples_per_second, sound_output.secondary_buffer_size);
             Win32FillSoundBuffer(&sound_output, 0, sound_output.secondary_buffer_size);
@@ -429,14 +433,9 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
                             ++x_offset;
                         }
 
-                        if (a_button) {
-                            sound_output.tone_hz     = 512;
-                            sound_output.wave_period = sound_output.samples_per_second / sound_output.tone_hz;
-                        }
-                        if (b_button) {
-                            sound_output.tone_hz     = 256;
-                            sound_output.wave_period = sound_output.samples_per_second / sound_output.tone_hz;
-                        }
+                        // NOTE: make sure tone_hz cannot be 0
+                        sound_output.tone_hz     = 512 + (int16_t)(256.0f * (float32_t)stick_ly / 30000.0f + 1.0);
+                        sound_output.wave_period = sound_output.samples_per_second / sound_output.tone_hz;
 
                         if (back) {
                             g_app_running = false;
@@ -455,14 +454,17 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
                     // where do we want start to lock
                     DWORD byte_to_lock = (sound_output.running_sample_idx * sound_output.bytes_per_sample) %
                                          sound_output.secondary_buffer_size;
+                    DWORD target_cursor =
+                        (play_cursor + sound_output.latency_sample_count * sound_output.bytes_per_sample) %
+                        sound_output.secondary_buffer_size;
                     DWORD bytes_to_write = 0;
-                    if (byte_to_lock > play_cursor) {
+                    if (byte_to_lock > target_cursor) {
                         // [xxx play ... lock xxx ]
                         bytes_to_write = sound_output.secondary_buffer_size - byte_to_lock;
-                        bytes_to_write += play_cursor;
+                        bytes_to_write += target_cursor;
                     } else {
                         // [... lock xxx play ... ]
-                        bytes_to_write = play_cursor - byte_to_lock;
+                        bytes_to_write = target_cursor - byte_to_lock;
                     }
                     Win32FillSoundBuffer(&sound_output, byte_to_lock, bytes_to_write);
                 }

@@ -9,6 +9,12 @@ Day 9 - Sine Wave sound
 - Fixed in a followup commit, the bug is that byte to write should be 0 when it's catching the play cursor.
   - initialize variable to 0
   - turn the warning level on in complier options.
+- Use controller to control the Hz
+  - what caused the glitch sound? it's not continous mathematically to make a Hz change and directly calculate the sine value from sample index
+  - how to avoid the glitch? track the sine value incrementally, so the jump is not that dramatic.
+- There's a delay in controller input and the actual Hz change, you can here it, how to resolve this?
+  - write a head the play cursor for some samples, so that the play cursor can receive the latest writes, rather than loop around the buffer to get the latest freq change.
+  - introduced in latency_sample_count
 
 
 Day 8 - Writing a Square Wave to DirectSound
