@@ -1,9 +1,13 @@
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <dsound.h>
+#include <intrin.h>
 #include <math.h>
 #include <windows.h>
 #include <xinput.h>
+
+#pragma intrinsic(__rdtsc)
 
 #define PI 3.14159265358979323846
 
@@ -338,6 +342,10 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
     windowClass.hInstance     = instance;
     windowClass.lpszClassName = "Handmade Windowclass";
 
+    LARGE_INTEGER perf_count_freq_result;
+    QueryPerformanceFrequency(&perf_count_freq_result);
+    int64_t perf_count_freq = perf_count_freq_result.QuadPart;
+
     if (RegisterClassA(&windowClass)) {
         HWND window_handle = CreateWindowExA(
             0,
@@ -384,6 +392,10 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
             Win32InitDSound(window_handle, sound_output.samples_per_second, sound_output.secondary_buffer_size);
             Win32FillSoundBuffer(&sound_output, 0, sound_output.secondary_buffer_size);
             g_dsound_secondary_buffer->Play(0, 0, DSBPLAY_LOOPING);
+
+            LARGE_INTEGER last_counter;
+            QueryPerformanceCounter(&last_counter);
+            uint64_t last_cycle_count = __rdtsc();
 
             while (g_app_running) {
                 while (PeekMessage(&message, 0, 0, 0, PM_REMOVE)) {
@@ -466,6 +478,24 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
 
                 // ++x_offset;
                 // ++y_offset;
+
+                // timing
+                LARGE_INTEGER end_counter;
+                QueryPerformanceCounter(&end_counter);
+                uint64_t end_cycle_count = __rdtsc();
+
+                uint64_t  cycle_elapsed   = end_cycle_count - last_cycle_count;
+                int64_t   counter_elapsed = end_counter.QuadPart - last_counter.QuadPart;
+                float32_t ms_per_frame    = 1000.0f * counter_elapsed / perf_count_freq;
+                float32_t fps             = 1.0f * perf_count_freq / counter_elapsed;
+                float32_t mc_per_frame    = cycle_elapsed / 1000.0f / 1000.0f;
+
+                char buffer[256];
+                sprintf(buffer, "%.2f ms/f, %.2f fps, %.2f mc/f\n", ms_per_frame, fps, mc_per_frame);
+                OutputDebugStringA(buffer);
+
+                last_counter     = end_counter;
+                last_cycle_count = end_cycle_count;
             }
         }
     } else {

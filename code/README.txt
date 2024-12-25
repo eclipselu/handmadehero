@@ -1,3 +1,17 @@
+Day 10 - Timing information of running game
+===========================================
+
+- RDTSC instruction gives access to the real-time stamp counter, which increment by 1 when a CPU cycle ends.
+- Depending on the OS, you might get everything that the CPU runs, not just your code.
+- A Couple of ideas of time:
+  - Wall clock time - time as it passes in the real world. Measured in seconds.
+  - Processor time - how many cycles? this is related to wall clock time by processor frequency, but for a long time now frequency varies a lot and quickly.
+- QueryPerformanceCounter, measures wall time
+
+What is an intrinsic?
+- it looks like a function call, it's a hint to the compiler that it's a specific assembly instruction. 
+- like: __rdtsc()
+
 Day 9 - Sine Wave sound
 =======================
 
