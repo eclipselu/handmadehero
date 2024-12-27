@@ -1,3 +1,16 @@
+Day 11 - Platform API design
+============================
+
+2 Styles to write platform code
+- Style 1: vitualizing the OS to the game.
+- Style 2: We can keep the platform layer as is, and invoke game specific code.
+  - e.g. call renderer in win32/macos/linux platform code, but renderer is a service that the game provides, and it's platform indenpendent.
+
+
+References:
+- Semantic compression: https://caseymuratori.com/blog_0015
+
+
 Day 10 - Timing information of running game
 ===========================================
 

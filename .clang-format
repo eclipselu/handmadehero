@@ -8,6 +8,7 @@ Language: Cpp
 DerivePointerAlignment: false
 PointerAlignment: Left
 ColumnLimit: 120
+SortIncludes: false
 
 AlignConsecutiveAssignments: true
 AlignConsecutiveDeclarations: true

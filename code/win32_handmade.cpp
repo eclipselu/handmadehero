@@ -7,16 +7,29 @@
 #include <windows.h>
 #include <xinput.h>
 
+#include "base.h"
+#include "handmade.h"
+#include "handmade.cpp"
+
+/*
+ TODO:
+ - Save game locations
+ - Getting a handle to our own executable file
+ - Asset loading path
+ - Threading
+ - Raw input, support multiple keyboards
+ - Sleep/timeBeginPeriod
+ - Clipcursor for multimonitor support
+ - fullscreen
+ - WM_SETCURSOR
+ - QueryCancelAutoplay
+ - Not the active application: WM_ACTIVEAPP
+ - Blt speed improvements
+ - Hardware accleration (OpenGL/Direct3D)
+ - Different Keyboard layout support
+ */
+
 #pragma intrinsic(__rdtsc)
-
-#define PI 3.14159265358979323846
-
-#define global        static
-#define local_persist static
-#define internal      static
-
-typedef float  float32_t;
-typedef double float64_t;
 
 struct Win32_Offscreen_Buffer {
     BITMAPINFO info;
@@ -134,26 +147,6 @@ Win32GetWindowDimension(HWND window) {
     dimension.width  = client_rect.right - client_rect.left;
     dimension.height = client_rect.bottom - client_rect.top;
     return dimension;
-}
-
-internal void
-Win32RenderBitmap(Win32_Offscreen_Buffer* buffer, int x_offset, int y_offset) {
-    uint8_t* row = (uint8_t*)buffer->memory;
-    for (int y = 0; y < buffer->height; ++y) {
-        uint32_t* pixel = (uint32_t*)row;
-
-        for (int x = 0; x < buffer->width; ++x) {
-            // byte order: BB GG RR 00
-
-            uint8_t blue  = (uint8_t)(y + y_offset);
-            uint8_t green = (uint8_t)(x + x_offset);
-            uint8_t red   = (uint8_t)(x + y + x_offset + y_offset);
-            *pixel        = (red << 16) | (green << 8) | blue;
-            ++pixel;
-        }
-
-        row += buffer->bytes_per_pixel * buffer->width;
-    }
 }
 
 internal void
@@ -471,7 +464,13 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
                     Win32FillSoundBuffer(&sound_output, byte_to_lock, bytes_to_write);
                 }
 
-                Win32RenderBitmap(&g_backbuffer, x_offset, y_offset);
+                Game_Offscreen_Buffer game_buffer = {};
+
+                game_buffer.bytes_per_pixel = g_backbuffer.bytes_per_pixel;
+                game_buffer.width           = g_backbuffer.width;
+                game_buffer.height          = g_backbuffer.height;
+                game_buffer.memory          = g_backbuffer.memory;
+                GameUpdateAndRender(&game_buffer, x_offset, y_offset);
 
                 Win32_Window_Dimension dimension = Win32GetWindowDimension(window_handle);
                 Win32DisplayBufferInWindow(device_ctx, dimension.width, dimension.height, g_backbuffer);
