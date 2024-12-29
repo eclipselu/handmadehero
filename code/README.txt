@@ -1,3 +1,11 @@
+Day 12 - Platform-independent Sound
+===================================
+
+- Write the usage code first, then design the APIs to do exactly/closely to that
+- Don't want to leak the Win32 DirectSound ring buffer to game layer.
+- Where do we want to store the sound samples? 
+  - probably not on the stack, VirtualAlloc to alloc on the heap
+
 Day 11 - Platform API design
 ============================
 

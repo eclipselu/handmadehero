@@ -1,5 +1,31 @@
-#include <stdint.h>
+#include <cstdint>
+#include <math.h>
+
+#include "base.h"
 #include "handmade.h"
+
+internal void
+GameOutputSound(Game_Sound_Output_Buffer* buffer, int tone_hz) {
+    local_persist float32_t t_sine;
+
+    int16_t tone_volume = 3000;
+    int     wave_period = buffer->samples_per_second / tone_hz;
+
+    int16_t* sample_out = buffer->samples;
+    for (int sample_idx = 0; sample_idx < buffer->sample_count; ++sample_idx) {
+        float32_t sine_val   = sin(t_sine);
+        int16_t   sample_val = (int16_t)(sine_val * tone_volume);
+
+        // left
+        *sample_out = sample_val;
+        ++sample_out;
+        // right
+        *sample_out = sample_val;
+        ++sample_out;
+
+        t_sine += 2.0 * PI * 1.0 / (float32_t)wave_period;
+    }
+}
 
 internal void
 RenderBitmap(Game_Offscreen_Buffer* buffer, int x_offset, int y_offset) {
@@ -22,6 +48,13 @@ RenderBitmap(Game_Offscreen_Buffer* buffer, int x_offset, int y_offset) {
 }
 
 internal void
-GameUpdateAndRender(Game_Offscreen_Buffer* buffer, int x_offset, int y_offset) {
-    RenderBitmap(buffer, x_offset, y_offset);
+GameUpdateAndRender(
+    Game_Offscreen_Buffer*    offscreen_buffer,
+    int                       x_offset,
+    int                       y_offset,
+    Game_Sound_Output_Buffer* sound_buffer,
+    int                       tone_hz) {
+    // TODO: allow sample offset here for more robust platform options
+    GameOutputSound(sound_buffer, tone_hz);
+    RenderBitmap(offscreen_buffer, x_offset, y_offset);
 }
