@@ -1,3 +1,11 @@
+Day 13 - Platform-independent Input
+===================================
+
+- As a game what do we save for user input? fighting game (sequences) or just a snapshot of a certain time?
+- We don't want to miss a button click
+- Joystick polling frequency?
+
+
 Day 12 - Platform-independent Sound
 ===================================
 

@@ -1,7 +1,6 @@
 #include <cstdint>
 #include <math.h>
 
-#include "base.h"
 #include "handmade.h"
 
 internal void
@@ -49,12 +48,24 @@ RenderBitmap(Game_Offscreen_Buffer* buffer, int x_offset, int y_offset) {
 
 internal void
 GameUpdateAndRender(
-    Game_Offscreen_Buffer*    offscreen_buffer,
-    int                       x_offset,
-    int                       y_offset,
-    Game_Sound_Output_Buffer* sound_buffer,
-    int                       tone_hz) {
+    Game_Input* input, Game_Offscreen_Buffer* offscreen_buffer, Game_Sound_Output_Buffer* sound_buffer) {
     // TODO: allow sample offset here for more robust platform options
+    local_persist int x_offset = 0;
+    local_persist int y_offset = 0;
+    local_persist int tone_hz  = 256;
+
+    Game_Controller_Input* controller_input0 = &input->controllers[0];
+    if (controller_input0->is_analog) {
+        tone_hz = 256 + (int)(128.0f * controller_input0->end_y);
+        x_offset += (int)4.0f * controller_input0->end_x;
+    } else {
+        // TODO: digital movement
+    }
+
+    if (controller_input0->down.ended_down) {
+        y_offset += 1;
+    }
+
     GameOutputSound(sound_buffer, tone_hz);
     RenderBitmap(offscreen_buffer, x_offset, y_offset);
 }

@@ -9,5 +9,8 @@
 typedef float  float32_t;
 typedef double float64_t;
 
+// utility macros
+#define ArrayCount(array) (sizeof(array) / sizeof((array)[0]))
+
 #define BASE_H
 #endif
