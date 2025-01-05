@@ -383,14 +383,9 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
             // [Left, Right] [Left, Right] ...
             // Left or Right has 16 bits, each left right tuple is called a sample
 
-            Win32_Sound_Output sound_output = {};
-            sound_output.samples_per_second = 48000;
-            // how many repeatable patterns, this is middle C in piano 261.6 hz
-            sound_output.tone_hz            = 256;
-            sound_output.tone_volume        = 6000;
-            sound_output.running_sample_idx = 0;
-            sound_output.wave_period        = sound_output.samples_per_second /
-                                       sound_output.tone_hz; // how many samples do we need to fill in a pattern
+            Win32_Sound_Output sound_output    = {};
+            sound_output.samples_per_second    = 48000;
+            sound_output.running_sample_idx    = 0;
             sound_output.bytes_per_sample      = sizeof(int16_t) * 2; // 2 channels, one channel is 16 bits
             sound_output.secondary_buffer_size = sound_output.samples_per_second * sound_output.bytes_per_sample;
             sound_output.latency_sample_count  = sound_output.samples_per_second / 15;
