@@ -394,6 +394,15 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
             Win32ClearSoundBuffer(&sound_output);
             g_dsound_secondary_buffer->Play(0, 0, DSBPLAY_LOOPING);
 
+            // Game memory
+            Game_Memory game_memory            = {};
+            game_memory.permanent_storage_size = MegaBytes(64);
+            game_memory.permanent_storage =
+                VirtualAlloc(0, game_memory.permanent_storage_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+            game_memory.transient_storage_size = GigaBytes((uint64_t)4);
+            game_memory.transient_storage =
+                VirtualAlloc(0, game_memory.transient_storage_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+
             // Game input
             Game_Input  game_inputs[2] = {};
             Game_Input* old_input      = &game_inputs[0];
@@ -515,7 +524,7 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
                 sound_buffer.samples_per_second = sound_output.samples_per_second;
                 sound_buffer.sample_count       = bytes_to_write / sound_output.bytes_per_sample;
                 sound_buffer.samples            = samples;
-                GameUpdateAndRender(new_input, &game_buffer, &sound_buffer);
+                GameUpdateAndRender(&game_memory, new_input, &game_buffer, &sound_buffer);
 
                 if (sound_is_valid) {
                     Win32FillSoundBuffer(&sound_output, byte_to_lock, bytes_to_write, &sound_buffer);

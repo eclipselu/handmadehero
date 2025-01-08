@@ -22,3 +22,5 @@ BinPackParameters: false
 
 # function return type
 AlwaysBreakAfterDefinitionReturnType: All
+
+IndentPPDirectives: BeforeHash 

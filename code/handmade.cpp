@@ -1,6 +1,7 @@
-#include <cstdint>
+#include <stdint.h>
 #include <math.h>
 
+#include "base.h"
 #include "handmade.h"
 
 internal void
@@ -33,7 +34,7 @@ RenderBitmap(Game_Offscreen_Buffer* buffer, int x_offset, int y_offset) {
         uint32_t* pixel = (uint32_t*)row;
 
         for (int x = 0; x < buffer->width; ++x) {
-            // byte order: BB GG RR 00
+            // (windows bitmap) byte order: BB GG RR 00
 
             uint8_t blue  = (uint8_t)(y + y_offset);
             uint8_t green = (uint8_t)(x + x_offset);
@@ -48,24 +49,33 @@ RenderBitmap(Game_Offscreen_Buffer* buffer, int x_offset, int y_offset) {
 
 internal void
 GameUpdateAndRender(
-    Game_Input* input, Game_Offscreen_Buffer* offscreen_buffer, Game_Sound_Output_Buffer* sound_buffer) {
-    // TODO: allow sample offset here for more robust platform options
-    local_persist int x_offset = 0;
-    local_persist int y_offset = 0;
-    local_persist int tone_hz  = 256;
+    Game_Memory*              memory,
+    Game_Input*               input,
+    Game_Offscreen_Buffer*    offscreen_buffer,
+    Game_Sound_Output_Buffer* sound_buffer) {
+
+    Assert(sizeof(Game_State) <= memory->permanent_storage_size);
+
+    Game_State* state = (Game_State*)memory->permanent_storage;
+    if (!memory->is_initialized) {
+        state->x_offset        = 0;
+        state->y_offset        = 0;
+        state->tone_hz         = 256;
+        memory->is_initialized = true;
+    }
 
     Game_Controller_Input* controller_input0 = &input->controllers[0];
     if (controller_input0->is_analog) {
-        tone_hz = 256 + (int)(128.0f * controller_input0->end_y);
-        x_offset += (int)4.0f * controller_input0->end_x;
+        state->tone_hz = 256 + (int)(128.0f * controller_input0->end_y);
+        state->x_offset += (int)4.0f * controller_input0->end_x;
     } else {
         // TODO: digital movement
     }
 
     if (controller_input0->down.ended_down) {
-        y_offset += 1;
+        state->y_offset += 1;
     }
 
-    GameOutputSound(sound_buffer, tone_hz);
-    RenderBitmap(offscreen_buffer, x_offset, y_offset);
+    GameOutputSound(sound_buffer, state->tone_hz);
+    RenderBitmap(offscreen_buffer, state->x_offset, state->y_offset);
 }

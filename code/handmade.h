@@ -1,3 +1,4 @@
+#include <cstdint>
 #ifndef HANDMADE_H
 
 #include <stdint.h>
@@ -59,8 +60,26 @@ struct Game_Input {
     Game_Controller_Input controllers[4];
 };
 
-internal void
-GameUpdateAndRender(Game_Input* input, Game_Offscreen_Buffer* offscreen_buffer, Game_Sound_Output_Buffer* sound_buffer);
+struct Game_State {
+    int x_offset;
+    int y_offset;
+    int tone_hz;
+};
+
+struct Game_Memory {
+    bool is_initialized;
+
+    uint64_t permanent_storage_size;
+    void*    permanent_storage;
+    uint64_t transient_storage_size;
+    void*    transient_storage;
+};
+
+internal void GameUpdateAndRender(
+    Game_Memory*              memory,
+    Game_Input*               input,
+    Game_Offscreen_Buffer*    offscreen_buffer,
+    Game_Sound_Output_Buffer* sound_buffer);
 
 #define HANDMADE_H
 #endif
