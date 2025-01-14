@@ -1,3 +1,11 @@
+Day 15 - Platform-independent Debug file I/O
+============================================
+
+- We want to read the entire file, instead of using the streaming io.
+- get file size -> reserve memory -> read file into reserved memory
+
+
+
 Day 14 - Platform-independent Game memory
 ==========================================
 

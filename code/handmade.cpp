@@ -58,6 +58,13 @@ GameUpdateAndRender(
 
     Game_State* state = (Game_State*)memory->permanent_storage;
     if (!memory->is_initialized) {
+        const char*            file_name = __FILE__;
+        Debug_Read_File_Result file      = DEBUGPlatformReadEntireFile(file_name);
+        if (file.content) {
+            DEBUGPlatformWriteEntireFile("test.out", file);
+            DEBUGPlatformFreeFileMemory(file.content);
+        }
+
         state->x_offset        = 0;
         state->y_offset        = 0;
         state->tone_hz         = 256;

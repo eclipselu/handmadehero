@@ -1,5 +1,5 @@
-#include <cstdint>
 #ifndef HANDMADE_H
+#define HANDMADE_H
 
 #include <stdint.h>
 #include "base.h"
@@ -81,5 +81,22 @@ internal void GameUpdateAndRender(
     Game_Offscreen_Buffer*    offscreen_buffer,
     Game_Sound_Output_Buffer* sound_buffer);
 
-#define HANDMADE_H
+#if BUILD_DEBUG
+struct Debug_Read_File_Result {
+    uint32_t content_size;
+    void*    content;
+};
+
+Debug_Read_File_Result DEBUGPlatformReadEntireFile(const char* file_name);
+bool                   DEBUGPlatformWriteEntireFile(const char* file_name, Debug_Read_File_Result result);
+void                   DEBUGPlatformFreeFileMemory(void* memory);
+#endif
+
+inline uint32_t
+SafeTruncateUint64(uint64_t val) {
+    Assert(val <= 0xFFFFFFFF);
+    uint32_t result = (uint32_t)val;
+    return result;
+}
+
 #endif

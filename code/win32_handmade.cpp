@@ -1,3 +1,4 @@
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <dsound.h>
@@ -57,6 +58,70 @@ global x_input_set_state* XInputSetState_ = XInputSetStateStub;
 #define DSOUND_CREATE(name) HRESULT WINAPI name(LPCGUID pcGuidDevice, LPDIRECTSOUND* ppDS, LPUNKNOWN pUnkOuter)
 typedef DSOUND_CREATE(direct_sound_create);
 
+internal Debug_Read_File_Result
+DEBUGPlatformReadEntireFile(const char* file_name) {
+    Debug_Read_File_Result result = {};
+
+    HANDLE file_handle =
+        CreateFileA(file_name, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (file_handle != INVALID_HANDLE_VALUE) {
+        LARGE_INTEGER file_size;
+        if (GetFileSizeEx(file_handle, &file_size)) {
+            uint32_t file_size32 = SafeTruncateUint64(file_size.QuadPart);
+
+            result.content = VirtualAlloc(0, file_size32, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+            if (result.content) {
+                DWORD bytes_read = 0;
+                if (ReadFile(file_handle, result.content, file_size32, &bytes_read, NULL) &&
+                    (bytes_read == file_size32)) {
+                    // NOTE: file read successfully
+                    result.content_size = (uint32_t)bytes_read;
+                } else {
+                    // TODO: logging
+                    DEBUGPlatformFreeFileMemory(result.content);
+                    result.content = NULL;
+                }
+            } else {
+                // TODO: logging
+            }
+        } else {
+            // TODO: logging
+        }
+
+        CloseHandle(file_handle);
+    } else {
+        // TODO: logging
+    }
+
+    return result;
+}
+
+internal bool
+DEBUGPlatformWriteEntireFile(const char* file_name, Debug_Read_File_Result read_result) {
+    bool result = false;
+
+    HANDLE file_handle = CreateFileA(file_name, GENERIC_WRITE, NULL, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (file_handle != INVALID_HANDLE_VALUE) {
+        DWORD bytes_written;
+
+        if (WriteFile(file_handle, read_result.content, read_result.content_size, &bytes_written, NULL)) {
+            result = (bytes_written == read_result.content_size);
+        } else {
+            // TODO: logging
+        }
+        CloseHandle(file_handle);
+    } else {
+        // TODO: logging
+    }
+
+    return result;
+}
+
+internal void
+DEBUGPlatformFreeFileMemory(void* memory) {
+    VirtualFree(memory, 0, MEM_RELEASE);
+}
+
 internal void
 Win32LoadXInput(void) {
     HMODULE XInputLib = LoadLibraryA("XInput1_3.dll");
@@ -87,8 +152,8 @@ Win32InitDSound(HWND window, int32_t samples_per_second, int32_t buffer_size) {
             if (SUCCEEDED(direct_sound->SetCooperativeLevel(window, DSSCL_PRIORITY))) {
                 // NOTE: Create a primary buffer (old school way of doing sound stuff, still need to set the mode)
                 //
-                // When creating a primary buffer, applications must set the dwBufferBytes member to zero. DirectSound
-                // will determine the best buffer size for the particular sound device in use
+                // When creating a primary buffer, applications must set the dwBufferBytes member to zero.
+                // DirectSound will determine the best buffer size for the particular sound device in use
                 DSBUFFERDESC buffer_desc = {};
                 buffer_desc.dwFlags      = DSBCAPS_PRIMARYBUFFER;
                 buffer_desc.dwSize       = sizeof(buffer_desc);
