@@ -1,5 +1,5 @@
 #include <stdint.h>
-#include <math.h>
+// #include <math.h>
 
 #include "base.h"
 #include "handmade.h"
@@ -13,7 +13,7 @@ GameOutputSound(Game_Sound_Output_Buffer* buffer, int tone_hz) {
 
     int16_t* sample_out = buffer->samples;
     for (int sample_idx = 0; sample_idx < buffer->sample_count; ++sample_idx) {
-        float32_t sine_val   = sin(t_sine);
+        float32_t sine_val   = (float32_t)sin(t_sine); // use the intrinsic version of sin, not the stdlib
         int16_t   sample_val = (int16_t)(sine_val * tone_volume);
 
         // left
@@ -23,7 +23,7 @@ GameOutputSound(Game_Sound_Output_Buffer* buffer, int tone_hz) {
         *sample_out = sample_val;
         ++sample_out;
 
-        t_sine += 2.0 * PI * 1.0 / (float32_t)wave_period;
+        t_sine += 2.0f * PI * 1.0f / (float32_t)wave_period;
     }
 }
 
@@ -74,7 +74,7 @@ GameUpdateAndRender(
     Game_Controller_Input* controller_input0 = &input->controllers[0];
     if (controller_input0->is_analog) {
         state->tone_hz = 256 + (int)(128.0f * controller_input0->end_y);
-        state->x_offset += (int)4.0f * controller_input0->end_x;
+        state->x_offset += (int)(4.0f * controller_input0->end_x);
     } else {
         // TODO: digital movement
     }

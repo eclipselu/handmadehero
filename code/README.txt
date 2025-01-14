@@ -1,3 +1,23 @@
+Day 16 - Some MSVC compiler options
+===================================
+
+- /nologo: do not display the msvc and linker version information during compilation
+- /MT:     link the c runtime library in the binary, instead of using the dll
+- /GR-:    disable RTTI
+- /EHa-:   disable C++ exception handling
+- /Oi:     Generate intrinsic functions
+- /Od:     Disables optimization, good for debugging
+- /WX:     treat warnings as errors
+- /W4:     set warning level, W4 is the highest
+- /Z7:     Generates C 7.0-compatible debugging information.
+- /FC:     Displays the full path of source code files passed to cl.exe in diagnostic text.
+- /wd2101: disables C4201 warning
+- /D:      macro definitions
+
+
+We're not targeting Windows XP for now, so ignored the XP related flags to compile a 32-bit binary.
+
+
 Day 15 - Platform-independent Debug file I/O
 ============================================
 

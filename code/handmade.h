@@ -87,9 +87,9 @@ struct Debug_Read_File_Result {
     void*    content;
 };
 
-Debug_Read_File_Result DEBUGPlatformReadEntireFile(const char* file_name);
-bool                   DEBUGPlatformWriteEntireFile(const char* file_name, Debug_Read_File_Result result);
-void                   DEBUGPlatformFreeFileMemory(void* memory);
+internal Debug_Read_File_Result DEBUGPlatformReadEntireFile(const char* file_name);
+internal bool                   DEBUGPlatformWriteEntireFile(const char* file_name, Debug_Read_File_Result result);
+internal void                   DEBUGPlatformFreeFileMemory(void* memory);
 #endif
 
 inline uint32_t

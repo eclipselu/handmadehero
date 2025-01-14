@@ -269,7 +269,7 @@ MainWindowCallback(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
     case WM_SYSKEYDOWN:
     case WM_KEYUP:
     case WM_KEYDOWN: {
-        uint32_t vk_code      = wparam;
+        uint32_t vk_code      = (uint32_t)wparam;
         bool     alt_key_down = (lparam & (1 << 29)) != 0;
         if (vk_code == VK_F4 && alt_key_down) {
             g_app_running = false;
@@ -464,7 +464,7 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
             game_memory.permanent_storage_size = MegaBytes(64);
             game_memory.permanent_storage =
                 VirtualAlloc(0, game_memory.permanent_storage_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-            game_memory.transient_storage_size = GigaBytes((uint64_t)4);
+            game_memory.transient_storage_size = GigaBytes(4);
             game_memory.transient_storage =
                 VirtualAlloc(0, game_memory.transient_storage_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 
@@ -617,7 +617,7 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
                 float32_t mc_per_frame    = cycle_elapsed / 1000.0f / 1000.0f;
 
                 char buffer[256];
-                sprintf(buffer, "%.2f ms/f, %.2f fps, %.2f mc/f\n", ms_per_frame, fps, mc_per_frame);
+                sprintf_s(buffer, "%.2f ms/f, %.2f fps, %.2f mc/f\n", ms_per_frame, fps, mc_per_frame);
                 OutputDebugStringA(buffer);
 
                 last_counter     = end_counter;
