@@ -71,16 +71,29 @@ GameUpdateAndRender(
         memory->is_initialized = true;
     }
 
-    Game_Controller_Input* controller_input0 = &input->controllers[0];
-    if (controller_input0->is_analog) {
-        state->tone_hz = 256 + (int)(128.0f * controller_input0->end_y);
-        state->x_offset += (int)(4.0f * controller_input0->end_x);
-    } else {
-        // TODO: digital movement
-    }
+    for (int controller_idx = 0; controller_idx < ArrayCount(input->controllers); ++controller_idx) {
+        Game_Controller_Input* controller_input = &input->controllers[controller_idx];
+        if (controller_input->is_analog) {
+            state->tone_hz = 256 + (int)(128.0f * controller_input->stick_avg_y);
+            state->x_offset += (int)(4.0f * controller_input->stick_avg_x);
+        } else {
+            if (controller_input->move_up.ended_down) {
+                state->y_offset -= 1;
+            }
+            if (controller_input->move_down.ended_down) {
+                state->y_offset += 1;
+            }
+            if (controller_input->move_left.ended_down) {
+                state->x_offset -= 1;
+            }
+            if (controller_input->move_right.ended_down) {
+                state->x_offset += 1;
+            }
+        }
 
-    if (controller_input0->down.ended_down) {
-        state->y_offset += 1;
+        if (controller_input->action_down.ended_down) {
+            state->y_offset += 1;
+        }
     }
 
     GameOutputSound(sound_buffer, state->tone_hz);

@@ -9,6 +9,8 @@ set build_dir=%code_dir%\..\build
 
 if not exist %build_dir% mkdir %build_dir%
 pushd %build_dir%
-cl /nologo /MT /GR- /EHa- /Od /Oi /WX /W4 /wd4201 /wd4189 /wd4100 /D BUILD_DEBUG=1 -FC -Z7 %code_dir%\win32_handmade.cpp user32.lib Gdi32.lib Xinput.lib
-:: clang -DBUILD_DEBUG=1 -g -o win32_handmade.exe %code_dir%\win32_handmade.cpp -luser32 -lGdi32 -lXinput.lib
+
+set common_compiler_flags=/nologo /MT /GR- /EHa- /Od /Oi /WX /W4 /wd4201 /wd4189 /wd4100 /D BUILD_DEBUG=1 -FC -Z7 
+set common_linker_flags=/opt:ref user32.lib Gdi32.lib Xinput.lib
+cl %common_compiler_flags% %code_dir%\win32_handmade.cpp /link %common_linker_flags%
 popd

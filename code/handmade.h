@@ -24,30 +24,28 @@ struct Game_Button_State {
 };
 
 struct Game_Controller_Input {
+    bool is_connected;
     bool is_analog;
 
-    // sticks
-    float32_t start_x;
-    float32_t start_y;
-    float32_t end_x;
-    float32_t end_y;
-    float32_t min_x;
-    float32_t min_y;
-    float32_t max_x;
-    float32_t max_y;
+    // sticks, use average offset
+    float32_t stick_avg_x;
+    float32_t stick_avg_y;
 
     union {
-        Game_Button_State buttons[8];
-        // NOTE: not the dpad, it's the actual ABXY buttons on an Xbox controller, e.g:
-        //  Y
-        // X B
-        //  A
-        // could be different for a DualShock controller
+        Game_Button_State buttons[12];
         struct {
-            Game_Button_State up;    // Y
-            Game_Button_State down;  // A
-            Game_Button_State left;  // X
-            Game_Button_State right; // B
+            // e.g. Dpad up/down/left/right
+            Game_Button_State move_up;
+            Game_Button_State move_down;
+            Game_Button_State move_left;
+            Game_Button_State move_right;
+
+            // e.g. Xbox buttons ABXY
+            Game_Button_State action_up;
+            Game_Button_State action_down;
+            Game_Button_State action_left;
+            Game_Button_State action_right;
+
             Game_Button_State left_shoulder;
             Game_Button_State right_shoulder;
             Game_Button_State start;
@@ -57,7 +55,13 @@ struct Game_Controller_Input {
 };
 
 struct Game_Input {
-    Game_Controller_Input controllers[4];
+    union {
+        Game_Controller_Input controllers[5];
+        struct {
+            Game_Controller_Input keyboard_controller;
+            Game_Controller_Input gamepad_controllers[4];
+        };
+    };
 };
 
 struct Game_State {

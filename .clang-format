@@ -24,3 +24,4 @@ BinPackParameters: false
 AlwaysBreakAfterDefinitionReturnType: All
 
 IndentPPDirectives: BeforeHash 
+IndentCaseLabels: true

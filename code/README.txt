@@ -1,3 +1,21 @@
+Day 17 - Unified Keyboard and Gamepad input
+===========================================
+
+NOTE: try to increase the funcionalness of the program more.
+
+- Deadzone processing on controller
+  - Deadzone: a region around zero that is considered 0
+  - See: https://learn.microsoft.com/en-us/windows/win32/xinput/getting-started-with-xinput
+- [BUGFIX] Fixed a bug that incorrectly swap old_input and new_input
+- How to unify the keyboard and gamepad
+  - Making analogue stick act like dpad buttons
+  - Use average x/y offset
+- The button naming was a bit confusing, changed to 2 sets of buttons
+  - move up/down/left/right: character movement
+  - action up/down/left/right: the actual ABXY buttons, according to their location on the gamepad.
+- Dpad can be unified to stick movement
+
+
 Day 16 - Some MSVC compiler options
 ===================================
 
