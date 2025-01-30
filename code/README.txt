@@ -1,7 +1,19 @@
+Day 18 - Enforcing a Video Frame Rate
+=====================================
+
+- Trying to run a fixed framerate, never want to do variable framerate, as the physics might be wrong. 
+- Target milliseconds/frame.
+- Audio: if we miss the next frame, we might have an audio lag. 
+  - [preferred] always hit the fps
+  - overwrite the next frame's audio
+  - frame of lag
+  - guard thread
+
+
 Day 17 - Unified Keyboard and Gamepad input
 ===========================================
 
-NOTE: try to increase the funcionalness of the program more.
+NOTE: try to increase the functionalness of the program more.
 
 - Deadzone processing on controller
   - Deadzone: a region around zero that is considered 0

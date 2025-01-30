@@ -36,6 +36,7 @@
 global bool                   g_app_running;
 global Win32_Offscreen_Buffer g_backbuffer;
 global LPDIRECTSOUNDBUFFER    g_dsound_secondary_buffer;
+global int64_t                g_perf_count_freq;
 
 /// Dynamically loading XInput functions
 // NOTE: define x_input_get_state as a function type, same as XInputGetState's signature
@@ -468,7 +469,7 @@ Win32ProcessXInputDigitalButton(
 }
 
 // NOTE: See https://learn.microsoft.com/en-us/windows/win32/xinput/getting-started-with-xinput for deadzone
-internal inline float32_t
+inline float32_t
 Win32NormalizeAnalogStickInput(int16_t stick, int16_t deadzone) {
     // [-32768, 32767] -> [-1, 1]
     float32_t normalized_input = 0.0f;
@@ -478,10 +479,28 @@ Win32NormalizeAnalogStickInput(int16_t stick, int16_t deadzone) {
     return normalized_input;
 }
 
+inline LARGE_INTEGER
+Win32GetWallClock(void) {
+    LARGE_INTEGER result;
+    QueryPerformanceCounter(&result);
+    return result;
+}
+
+inline float32_t
+Win32GetMilliSecondsElapsed(LARGE_INTEGER start, LARGE_INTEGER end) {
+    float32_t ms_elapsed = 1000.0f * (float32_t)(end.QuadPart - start.QuadPart) / (float32_t)g_perf_count_freq;
+    return ms_elapsed;
+}
+
 int WINAPI
 WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cmd) {
-    Win32LoadXInput();
+    LARGE_INTEGER perf_count_freq_result;
+    QueryPerformanceFrequency(&perf_count_freq_result);
+    g_perf_count_freq = perf_count_freq_result.QuadPart;
 
+    bool sleep_is_granular = (bool)timeBeginPeriod(1);
+
+    Win32LoadXInput();
     WNDCLASSA windowClass = {};
 
     Win32ResizeDIBSection(&g_backbuffer, 1280, 720);
@@ -491,9 +510,9 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
     windowClass.hInstance     = instance;
     windowClass.lpszClassName = "Handmade Windowclass";
 
-    LARGE_INTEGER perf_count_freq_result;
-    QueryPerformanceFrequency(&perf_count_freq_result);
-    int64_t perf_count_freq = perf_count_freq_result.QuadPart;
+    int       monitor_refresh_hz          = 60;
+    int       game_refresh_hz             = monitor_refresh_hz / 2;
+    float32_t target_ms_elapsed_per_frame = 1000.0f / (float32_t)game_refresh_hz;
 
     if (RegisterClassA(&windowClass)) {
         HWND window_handle = CreateWindowExA(
@@ -551,7 +570,7 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
             Game_Input* new_input      = &game_inputs[1];
 
             // Performance
-            LARGE_INTEGER last_counter;
+            LARGE_INTEGER last_counter = Win32GetWallClock();
             QueryPerformanceCounter(&last_counter);
             uint64_t last_cycle_count = __rdtsc();
 
@@ -561,7 +580,7 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
                 Game_Controller_Input* new_keyboard_controller = &new_input->keyboard_controller;
 
                 // TODO: cannot zero out everying because the up/down key will be wrong.
-                *new_keyboard_controller = {};
+                *new_keyboard_controller              = {};
                 new_keyboard_controller->is_connected = true;
                 for (int button_idx = 0; button_idx < ArrayCount(new_keyboard_controller->buttons); ++button_idx) {
                     new_keyboard_controller->buttons[button_idx].ended_down =
@@ -581,7 +600,7 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
 
                     if (XInputGetState(controller_idx, &controller_state) == ERROR_SUCCESS) {
                         new_controller->is_connected = true;
-                        XINPUT_GAMEPAD* gamepad = &controller_state.Gamepad;
+                        XINPUT_GAMEPAD* gamepad      = &controller_state.Gamepad;
 
                         // XInput -> Game_Input
                         Win32ProcessXInputDigitalButton(
@@ -634,19 +653,19 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
                         bool dpad_right = gamepad->wButtons & XINPUT_GAMEPAD_DPAD_RIGHT;
                         if (dpad_up) {
                             new_controller->stick_avg_y = -1.0;
-                            new_controller->is_analog = false;
+                            new_controller->is_analog   = false;
                         }
                         if (dpad_down) {
                             new_controller->stick_avg_y = 1.0;
-                            new_controller->is_analog = false;
+                            new_controller->is_analog   = false;
                         }
                         if (dpad_left) {
                             new_controller->stick_avg_x = -1.0;
-                            new_controller->is_analog = false;
+                            new_controller->is_analog   = false;
                         }
                         if (dpad_right) {
                             new_controller->stick_avg_x = 1.0;
-                            new_controller->is_analog = false;
+                            new_controller->is_analog   = false;
                         }
                         float32_t threshold = 0.5f;
                         Win32ProcessXInputDigitalButton(
@@ -729,6 +748,25 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
 
                 VirtualFree(samples, 0, MEM_RELEASE);
 
+                // TODO: enforcing the framerate
+                LARGE_INTEGER work_counter         = Win32GetWallClock();
+                float32_t     ms_elapsed_for_work  = Win32GetMilliSecondsElapsed(last_counter, work_counter);
+                float32_t     ms_elapsed_for_frame = ms_elapsed_for_work;
+                if (ms_elapsed_for_work < target_ms_elapsed_per_frame) {
+                    while (ms_elapsed_for_frame < target_ms_elapsed_per_frame) {
+                        if (sleep_is_granular) {
+                            DWORD sleep_ms = (DWORD)(target_ms_elapsed_per_frame - ms_elapsed_for_frame);
+                            if (sleep_ms > 0) {
+                                Sleep(sleep_ms);
+                            }
+                        }
+                        ms_elapsed_for_frame = Win32GetMilliSecondsElapsed(last_counter, Win32GetWallClock());
+                    }
+                    // Sleep for the rest of the frame time.
+                } else {
+                    // TODO: logging
+                }
+
                 Win32_Window_Dimension dimension = Win32GetWindowDimension(window_handle);
                 Win32DisplayBufferInWindow(device_ctx, dimension.width, dimension.height, g_backbuffer);
 
@@ -738,21 +776,18 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
                 new_input        = old_input;
                 old_input        = temp;
 
+                LARGE_INTEGER end_counter     = Win32GetWallClock();
+                uint64_t      end_cycle_count = __rdtsc();
+#if 1
+                float32_t ms_per_frame  = Win32GetMilliSecondsElapsed(last_counter, end_counter);
+                uint64_t  cycle_elapsed = end_cycle_count - last_cycle_count;
+                float32_t mc_per_frame  = cycle_elapsed / 1000.0f / 1000.0f;
+                char      buffer[256];
+                sprintf_s(buffer, "%.2f ms/f,  %.2f mc/f\n", ms_per_frame, mc_per_frame);
+                OutputDebugStringA(buffer);
+#endif
+
                 // timing
-                LARGE_INTEGER end_counter;
-                QueryPerformanceCounter(&end_counter);
-                uint64_t end_cycle_count = __rdtsc();
-
-                uint64_t  cycle_elapsed   = end_cycle_count - last_cycle_count;
-                int64_t   counter_elapsed = end_counter.QuadPart - last_counter.QuadPart;
-                float32_t ms_per_frame    = 1000.0f * counter_elapsed / perf_count_freq;
-                float32_t fps             = 1.0f * perf_count_freq / counter_elapsed;
-                float32_t mc_per_frame    = cycle_elapsed / 1000.0f / 1000.0f;
-
-                // char buffer[256];
-                // sprintf_s(buffer, "%.2f ms/f, %.2f fps, %.2f mc/f\n", ms_per_frame, fps, mc_per_frame);
-                // OutputDebugStringA(buffer);
-
                 last_counter     = end_counter;
                 last_cycle_count = end_cycle_count;
             }
