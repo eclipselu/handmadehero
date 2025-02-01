@@ -1,6 +1,9 @@
 #ifndef WIN32_HANDMADE_H
 #define WIN32_HANDMADE_H
 
+#include <stdint.h>
+#include <Windows.h>
+
 struct Win32_Offscreen_Buffer {
     BITMAPINFO info;
     void*      memory;
@@ -21,6 +24,11 @@ struct Win32_Sound_Output {
     int      secondary_buffer_size;
 
     int latency_sample_count;
+};
+
+struct Win32_Debug_Time_Marker {
+    DWORD play_cursor;
+    DWORD write_cursor;
 };
 
 #endif

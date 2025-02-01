@@ -492,6 +492,43 @@ Win32GetMilliSecondsElapsed(LARGE_INTEGER start, LARGE_INTEGER end) {
     return ms_elapsed;
 }
 
+internal void
+Win32DebugDrawVertical(Win32_Offscreen_Buffer* backbuffer, int x, int top, int bottom, uint32_t color) {
+    int      pitch = backbuffer->width * backbuffer->bytes_per_pixel;
+    uint8_t* pixel = (uint8_t*)backbuffer->memory + top * pitch + x * backbuffer->bytes_per_pixel;
+
+    for (int y = top; y < bottom; ++y) {
+        *(uint32_t*)pixel = color;
+        pixel += pitch;
+    }
+}
+
+internal void
+Win32DebugSyncDisplay(
+    Win32_Offscreen_Buffer*  backbuffer,
+    int                      marker_count,
+    Win32_Debug_Time_Marker* debug_time_markers,
+    Win32_Sound_Output*      sound_output,
+    float32_t                target_ms_per_frame) {
+
+    int padx = 16;
+    int pady = 16;
+
+    int top    = pady;
+    int bottom = backbuffer->height - pady;
+
+    // Draw
+    float32_t c = (float32_t)backbuffer->width / (float32_t)sound_output->secondary_buffer_size;
+    for (int marker_idx = 0; marker_idx < marker_count; ++marker_idx) {
+        Win32_Debug_Time_Marker marker = debug_time_markers[marker_idx];
+
+        int play_cursor_x  = padx + (int)(c * marker.play_cursor);
+        int write_cursor_x = padx + (int)(c * marker.write_cursor);
+        Win32DebugDrawVertical(backbuffer, play_cursor_x, top, bottom, 0xFFFFFFFF);
+        Win32DebugDrawVertical(backbuffer, write_cursor_x, top, bottom, 0x00FF00FF);
+    }
+}
+
 int WINAPI
 WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cmd) {
     LARGE_INTEGER perf_count_freq_result;
@@ -510,10 +547,11 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
     windowClass.hInstance     = instance;
     windowClass.lpszClassName = "Handmade Windowclass";
 
-    int       monitor_refresh_hz          = 60;
-    int       game_refresh_hz             = monitor_refresh_hz / 2;
-    float32_t target_ms_elapsed_per_frame = 1000.0f / (float32_t)game_refresh_hz;
+#define MONITOR_REFRESH_HZ      60
+#define GAME_REFRESH_HZ         (MONITOR_REFRESH_HZ / 2)
+#define AUDIO_LATENCY_IN_FRAMES 3
 
+    float32_t target_ms_elapsed_per_frame = 1000.0f / (float32_t)GAME_REFRESH_HZ;
     if (RegisterClassA(&windowClass)) {
         HWND window_handle = CreateWindowExA(
             0,
@@ -549,7 +587,9 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
             sound_output.running_sample_idx    = 0;
             sound_output.bytes_per_sample      = sizeof(int16_t) * 2; // 2 channels, one channel is 16 bits
             sound_output.secondary_buffer_size = sound_output.samples_per_second * sound_output.bytes_per_sample;
-            sound_output.latency_sample_count  = sound_output.samples_per_second / 15;
+            // 2 frames of delay
+            sound_output.latency_sample_count =
+                AUDIO_LATENCY_IN_FRAMES * sound_output.samples_per_second / GAME_REFRESH_HZ;
 
             Win32InitDSound(window_handle, sound_output.samples_per_second, sound_output.secondary_buffer_size);
             Win32ClearSoundBuffer(&sound_output);
@@ -573,6 +613,13 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
             LARGE_INTEGER last_counter = Win32GetWallClock();
             QueryPerformanceCounter(&last_counter);
             uint64_t last_cycle_count = __rdtsc();
+
+            int                     debug_time_marker_idx  = 0;
+            Win32_Debug_Time_Marker debug_time_markers[15] = {0}; // game_refresh_hz / 2
+
+            // Direct sound
+            DWORD last_play_cursor = 0;
+            bool  is_sound_valid   = false;
 
             while (g_app_running) {
                 // keyboard controller
@@ -707,20 +754,15 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
 
                 // Test dsound output
                 // both cursors are in bytes
-                DWORD play_cursor;
-                DWORD write_cursor;
                 DWORD bytes_to_write = 0;
                 DWORD byte_to_lock   = 0;
 
-                HRESULT hr = g_dsound_secondary_buffer->GetCurrentPosition(&play_cursor, &write_cursor);
-
-                bool sound_is_valid = SUCCEEDED(hr);
-                if (sound_is_valid) {
+                if (is_sound_valid) {
                     // where do we want start to lock
                     byte_to_lock = (sound_output.running_sample_idx * sound_output.bytes_per_sample) %
                                    sound_output.secondary_buffer_size;
                     DWORD target_cursor =
-                        (play_cursor + sound_output.latency_sample_count * sound_output.bytes_per_sample) %
+                        (last_play_cursor + sound_output.latency_sample_count * sound_output.bytes_per_sample) %
                         sound_output.secondary_buffer_size;
                     if (byte_to_lock > target_cursor) {
                         // [xxx play ... lock xxx ]
@@ -742,7 +784,16 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
                 sound_buffer.samples            = samples;
                 GameUpdateAndRender(&game_memory, new_input, &game_buffer, &sound_buffer);
 
-                if (sound_is_valid) {
+                if (is_sound_valid) {
+                    DWORD debug_play_cursor, debug_write_cursor;
+                    g_dsound_secondary_buffer->GetCurrentPosition(&debug_play_cursor, &debug_write_cursor);
+
+#if HANDMADE_INTERNAL
+                    char text_buffer[256];
+                    sprintf_s(
+                        text_buffer, "play_cursor: %u, write_cursor: %u\n", debug_play_cursor, debug_write_cursor);
+                    OutputDebugStringA(text_buffer);
+#endif
                     Win32FillSoundBuffer(&sound_output, byte_to_lock, bytes_to_write, &sound_buffer);
                 }
 
@@ -767,29 +818,61 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
                     // TODO: logging
                 }
 
-                Win32_Window_Dimension dimension = Win32GetWindowDimension(window_handle);
-                Win32DisplayBufferInWindow(device_ctx, dimension.width, dimension.height, g_backbuffer);
-
-                // swap old and new inputs
-                // TODO: make a swap macro?
-                Game_Input* temp = new_input;
-                new_input        = old_input;
-                old_input        = temp;
-
                 LARGE_INTEGER end_counter     = Win32GetWallClock();
                 uint64_t      end_cycle_count = __rdtsc();
-#if 1
+
                 float32_t ms_per_frame  = Win32GetMilliSecondsElapsed(last_counter, end_counter);
                 uint64_t  cycle_elapsed = end_cycle_count - last_cycle_count;
                 float32_t mc_per_frame  = cycle_elapsed / 1000.0f / 1000.0f;
                 char      buffer[256];
                 sprintf_s(buffer, "%.2f ms/f,  %.2f mc/f\n", ms_per_frame, mc_per_frame);
                 OutputDebugStringA(buffer);
-#endif
 
                 // timing
                 last_counter     = end_counter;
                 last_cycle_count = end_cycle_count;
+
+                Win32_Window_Dimension dimension = Win32GetWindowDimension(window_handle);
+#if HANDMADE_INTERNAL
+                Win32DebugSyncDisplay(
+                    &g_backbuffer,
+                    ArrayCount(debug_time_markers),
+                    debug_time_markers,
+                    &sound_output,
+                    target_ms_elapsed_per_frame);
+#endif
+                Win32DisplayBufferInWindow(device_ctx, dimension.width, dimension.height, g_backbuffer);
+
+                DWORD   play_cursor;
+                DWORD   write_cursor;
+                HRESULT hr = g_dsound_secondary_buffer->GetCurrentPosition(&play_cursor, &write_cursor);
+                if (SUCCEEDED(hr)) {
+                    last_play_cursor = play_cursor;
+                    if (!is_sound_valid) {
+                        sound_output.running_sample_idx = write_cursor / sound_output.bytes_per_sample;
+                        is_sound_valid                  = true;
+                    }
+                } else {
+                    is_sound_valid = false;
+                }
+
+#if HANDMADE_INTERNAL
+                {
+                    Win32_Debug_Time_Marker* marker = &debug_time_markers[debug_time_marker_idx++];
+
+                    marker->play_cursor  = play_cursor;
+                    marker->write_cursor = write_cursor;
+                    if (debug_time_marker_idx >= ArrayCount(debug_time_markers)) {
+                        debug_time_marker_idx = 0;
+                    }
+                }
+#endif
+
+                // swap old and new inputs
+                // TODO: make a swap macro?
+                Game_Input* temp = new_input;
+                new_input        = old_input;
+                old_input        = temp;
             }
         }
     } else {

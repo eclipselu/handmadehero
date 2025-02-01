@@ -1,3 +1,27 @@
+Day 19 - Improving Audio Sync
+=============================
+
+- Create a Debug Diagram for audio sync debug code
+  - Draw both play and write cursor
+  - Tuning audio sample latency
+- Getting the same audio latency for play cursor and write cursor:
+
+play_cursor: 86400, write_cursor: 92160
+play_cursor: 92160, write_cursor: 97920
+play_cursor: 99840, write_cursor: 105600
+play_cursor: 105600, write_cursor: 111360
+
+gap = 111360 - 105600 = 5760 bytes = 5760 / 4 (bytes per sample) = 1440 samples
+1440 samples is roughly 33.33ms of audio data (1 frame in 30fps)
+
+but here: https://learn.microsoft.com/en-us/previous-versions/windows/desktop/mt708925(v=vs.85), it says:
+
+> The write cursor indicates the position at which it is safe to write new data to the buffer.
+> The write cursor always leads the play cursor, typically by about **15 milliseconds' worth of audio data**.
+> It is always safe to change data that is behind the position indicated by the lpdwCurrentPlayCursor parameter.
+
+Not sure why MSDN says differently, right now we increase the audio latency when writing to 3 frames.
+
 Day 18 - Enforcing a Video Frame Rate
 =====================================
 
