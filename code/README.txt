@@ -1,3 +1,25 @@
+Day 20 - Debugging Audio sync
+=============================
+
+- Breaking down the time spent for each frame
+  - gather input -> update, render prep -> rendering -> wait -> flip
+  - impossible to output sound even before the gather input stage
+  - overlapping the gather input of the current frame and the rendering of the last frame?
+    - introduced input lag, probably not a good idea, as low input lag is more important
+
+- Use the play to write cursor delta to adjust target audio latency
+- Keeping code fluid and a bit messy at early stage, get it working and stable, before considering pull it out.
+- audio clock might not be in sync with wall clock (cpu clock)
+
+Achieving audio sync is complicated TODO: link the noteability diagram here.
+
+We want our projected frame boundary byte to be close to the actual play_cursor when the frame flips.
+
+Also the play/write cursor update granularity is about 480 samples:
+- can be done by doing a while-true loop and printing out the cursor locations, see how much it changes.
+- update granularity is 1920 bytes 
+This needs also be taken into consideration in doing audio sync.
+
 Day 19 - Improving Audio Sync
 =============================
 
@@ -12,7 +34,7 @@ play_cursor: 99840, write_cursor: 105600
 play_cursor: 105600, write_cursor: 111360
 
 gap = 111360 - 105600 = 5760 bytes = 5760 / 4 (bytes per sample) = 1440 samples
-1440 samples is roughly 33.33ms of audio data (1 frame in 30fps)
+1440 samples is roughly 30ms of audio data
 
 but here: https://learn.microsoft.com/en-us/previous-versions/windows/desktop/mt708925(v=vs.85), it says:
 

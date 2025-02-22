@@ -23,7 +23,11 @@ GameOutputSound(Game_Sound_Output_Buffer* buffer, int tone_hz) {
         *sample_out = sample_val;
         ++sample_out;
 
+        // NOTE: if we keep adding t_sine will lose its precision, since sine function is periodic (2*pi)
         t_sine += 2.0f * PI * 1.0f / (float32_t)wave_period;
+        if (t_sine > 2.0f * PI) {
+            t_sine -= 2.0f * PI;
+        }
     }
 }
 
@@ -48,11 +52,15 @@ RenderBitmap(Game_Offscreen_Buffer* buffer, int x_offset, int y_offset) {
 }
 
 internal void
-GameUpdateAndRender(
-    Game_Memory*              memory,
-    Game_Input*               input,
-    Game_Offscreen_Buffer*    offscreen_buffer,
-    Game_Sound_Output_Buffer* sound_buffer) {
+GameGetSoundSamples(Game_Memory* memory, Game_Sound_Output_Buffer* sound_buffer) {
+    Assert(sizeof(Game_State) <= memory->permanent_storage_size);
+
+    Game_State* state = (Game_State*)memory->permanent_storage;
+    GameOutputSound(sound_buffer, state->tone_hz);
+}
+
+internal void
+GameUpdateAndRender(Game_Memory* memory, Game_Input* input, Game_Offscreen_Buffer* offscreen_buffer) {
 
     Assert(sizeof(Game_State) <= memory->permanent_storage_size);
 
@@ -96,6 +104,5 @@ GameUpdateAndRender(
         }
     }
 
-    GameOutputSound(sound_buffer, state->tone_hz);
     RenderBitmap(offscreen_buffer, state->x_offset, state->y_offset);
 }

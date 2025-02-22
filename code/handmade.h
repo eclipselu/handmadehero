@@ -79,11 +79,11 @@ struct Game_Memory {
     void*    transient_storage;
 };
 
-internal void GameUpdateAndRender(
-    Game_Memory*              memory,
-    Game_Input*               input,
-    Game_Offscreen_Buffer*    offscreen_buffer,
-    Game_Sound_Output_Buffer* sound_buffer);
+internal void GameUpdateAndRender(Game_Memory* memory, Game_Input* input, Game_Offscreen_Buffer* offscreen_buffer);
+
+// NOTE: this has to be a very fast function, it cannot be more than 1ms or so
+// TODO: Reduce the pressure on this function's performance by measuring it.
+internal void GameGetSoundSamples(Game_Memory* memory, Game_Sound_Output_Buffer* sound_buffer);
 
 #if BUILD_DEBUG
 struct Debug_Read_File_Result {
