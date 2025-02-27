@@ -9,7 +9,6 @@
 
 #include "base.h"
 #include "handmade.h"
-#include "handmade.cpp"
 #include "win32_handmade.h"
 
 /*
@@ -60,8 +59,13 @@ global x_input_set_state* XInputSetState_ = XInputSetStateStub;
 #define DSOUND_CREATE(name) HRESULT WINAPI name(LPCGUID pcGuidDevice, LPDIRECTSOUND* ppDS, LPUNKNOWN pUnkOuter)
 typedef DSOUND_CREATE(direct_sound_create);
 
-internal Debug_Read_File_Result
-DEBUGPlatformReadEntireFile(const char* file_name) {
+void
+DebugPlatformFreeFileMemory(void* memory) {
+    VirtualFree(memory, 0, MEM_RELEASE);
+}
+
+Debug_Read_File_Result
+DebugPlatformReadEntireFile(const char* file_name) {
     Debug_Read_File_Result result = {};
 
     HANDLE file_handle =
@@ -80,7 +84,7 @@ DEBUGPlatformReadEntireFile(const char* file_name) {
                     result.content_size = (uint32_t)bytes_read;
                 } else {
                     // TODO: logging
-                    DEBUGPlatformFreeFileMemory(result.content);
+                    DebugPlatformFreeFileMemory(result.content);
                     result.content = NULL;
                 }
             } else {
@@ -98,8 +102,8 @@ DEBUGPlatformReadEntireFile(const char* file_name) {
     return result;
 }
 
-internal bool
-DEBUGPlatformWriteEntireFile(const char* file_name, Debug_Read_File_Result read_result) {
+bool
+DebugPlatformWriteEntireFile(const char* file_name, Debug_Read_File_Result read_result) {
     bool result = false;
 
     HANDLE file_handle = CreateFileA(file_name, GENERIC_WRITE, NULL, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -120,17 +124,42 @@ DEBUGPlatformWriteEntireFile(const char* file_name, Debug_Read_File_Result read_
 }
 
 internal void
-DEBUGPlatformFreeFileMemory(void* memory) {
-    VirtualFree(memory, 0, MEM_RELEASE);
-}
-
-internal void
 Win32LoadXInput(void) {
     HMODULE XInputLib = LoadLibraryA("XInput1_3.dll");
     if (XInputLib) {
         XInputGetState_ = (x_input_get_state*)GetProcAddress(XInputLib, "XInputGetState");
         XInputSetState_ = (x_input_set_state*)GetProcAddress(XInputLib, "XInputSetState");
     }
+}
+
+struct Win32_Game_Code {
+    HMODULE game_code_dll;
+
+    game_get_sound_samples* GameGetSoundSamples;
+    game_update_and_render* GameUpdateAndRender;
+
+    bool is_valid;
+};
+
+internal Win32_Game_Code
+Win32LoadGameCode(void) {
+    Win32_Game_Code result = {};
+    result.game_code_dll   = LoadLibraryA("handmade.dll");
+
+    if (result.game_code_dll) {
+        result.GameGetSoundSamples =
+            (game_get_sound_samples*)GetProcAddress(result.game_code_dll, "GameGetSoundSamples");
+        result.GameUpdateAndRender =
+            (game_update_and_render*)GetProcAddress(result.game_code_dll, "GameUpdateAndRender");
+        result.is_valid = result.GameUpdateAndRender && result.GameGetSoundSamples;
+    }
+
+    if (!result.is_valid) {
+        result.GameGetSoundSamples = GameGetSoundSamplesStub;
+        result.GameUpdateAndRender = GameUpdateAndRenderStub;
+    }
+
+    return result;
 }
 
 internal void
@@ -605,6 +634,8 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
     bool sleep_is_granular = (bool)timeBeginPeriod(1);
 
     Win32LoadXInput();
+    Win32_Game_Code game = Win32LoadGameCode();
+
     WNDCLASSA windowClass = {};
 
     Win32ResizeDIBSection(&g_backbuffer, 1280, 720);
@@ -678,6 +709,9 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
             game_memory.transient_storage_size = GigaBytes(4);
             game_memory.transient_storage =
                 VirtualAlloc(0, game_memory.transient_storage_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+            game_memory.DebugPlatformReadEntireFile  = DebugPlatformReadEntireFile;
+            game_memory.DebugPlatformWriteEntireFile = DebugPlatformWriteEntireFile;
+            game_memory.DebugPlatformFreeFileMemory  = DebugPlatformFreeFileMemory;
 
             // Game input
             Game_Input  game_inputs[2] = {};
@@ -835,7 +869,7 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
                     game_buffer.width           = g_backbuffer.width;
                     game_buffer.height          = g_backbuffer.height;
                     game_buffer.memory          = g_backbuffer.memory;
-                    GameUpdateAndRender(&game_memory, new_input, &game_buffer);
+                    game.GameUpdateAndRender(&game_memory, new_input, &game_buffer);
 
                     LARGE_INTEGER audio_wall_clock = Win32GetWallClock();
                     float32_t     from_beginning_to_audio_ms =
@@ -922,7 +956,7 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
                         sound_buffer.samples_per_second = sound_output.samples_per_second;
                         sound_buffer.sample_count       = bytes_to_write / sound_output.bytes_per_sample;
                         sound_buffer.samples            = samples;
-                        GameGetSoundSamples(&game_memory, &sound_buffer);
+                        game.GameGetSoundSamples(&game_memory, &sound_buffer);
 
 #if HANDMADE_INTERNAL
                         Win32_Debug_Time_Marker* marker   = &debug_time_markers[debug_time_marker_idx];

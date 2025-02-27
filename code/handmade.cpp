@@ -1,8 +1,11 @@
 #include <stdint.h>
-// #include <math.h>
+#include <math.h>
+#include <intrin.h>
 
 #include "base.h"
 #include "handmade.h"
+
+#pragma intrinsic(sin)
 
 internal void
 GameOutputSound(Game_Sound_Output_Buffer* buffer, int tone_hz) {
@@ -51,26 +54,25 @@ RenderBitmap(Game_Offscreen_Buffer* buffer, int x_offset, int y_offset) {
     }
 }
 
-internal void
-GameGetSoundSamples(Game_Memory* memory, Game_Sound_Output_Buffer* sound_buffer) {
+extern "C" __declspec(dllexport)
+GAME_GET_SOUND_SAMPLES(GameGetSoundSamples) {
     Assert(sizeof(Game_State) <= memory->permanent_storage_size);
 
     Game_State* state = (Game_State*)memory->permanent_storage;
     GameOutputSound(sound_buffer, state->tone_hz);
 }
 
-internal void
-GameUpdateAndRender(Game_Memory* memory, Game_Input* input, Game_Offscreen_Buffer* offscreen_buffer) {
-
+extern "C" __declspec(dllexport)
+GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     Assert(sizeof(Game_State) <= memory->permanent_storage_size);
 
     Game_State* state = (Game_State*)memory->permanent_storage;
     if (!memory->is_initialized) {
         const char*            file_name = __FILE__;
-        Debug_Read_File_Result file      = DEBUGPlatformReadEntireFile(file_name);
+        Debug_Read_File_Result file      = memory->DebugPlatformReadEntireFile(file_name);
         if (file.content) {
-            DEBUGPlatformWriteEntireFile("test.out", file);
-            DEBUGPlatformFreeFileMemory(file.content);
+            memory->DebugPlatformWriteEntireFile("test.out", file);
+            memory->DebugPlatformFreeFileMemory(file.content);
         }
 
         state->x_offset        = 0;

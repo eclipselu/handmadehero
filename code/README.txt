@@ -1,3 +1,28 @@
+
+Day 21 - Loading Game Code Dynamically
+======================================
+
+- Split the game code into a DLL
+- Invoke game code in handmade.dll from win32_handmade.exe
+  - remove internal linkage modifiers - internal(static)
+  - use the same trick to load XINPUT dll to load the dll
+  - have stub functions, game won't crash?
+  - keep track of the loaded HMODULE (dll)
+  - IMPORTANT: need to fix the name mangling in C++ compiler, we only need old style C linkage
+    - use extern "C"
+  - export the function, 2 ways: https://learn.microsoft.com/en-us/cpp/build/exporting-from-a-dll?view=msvc-170
+    1. compiler flag
+    2. put __declspec(dllexport)
+  - use dumpbin tool to view the DLL export table, to see the difference between C++ linkage and C linkage (with extern "C")
+- Invoke platform code in win32_handmade.cpp in handmade.dll?
+  - can we load the exe? we can, but we don't have to do that
+  - Use game memory to pass the function pointer to the platform specific functions - like DEBUGWriteEntireFile
+
+- TODOs:
+  - Change function pointer type definition naming to be consistent with other defintions
+  - Unload the game code
+  - Get rid of local_persist variables, put them in Game_State
+
 Day 20 - Debugging Audio sync
 =============================
 
