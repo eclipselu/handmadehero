@@ -68,6 +68,8 @@ struct Game_State {
     int x_offset;
     int y_offset;
     int tone_hz;
+
+    float32_t t_sine;
 };
 
 #if BUILD_DEBUG
@@ -94,9 +96,11 @@ struct Game_Memory {
     uint64_t transient_storage_size;
     void*    transient_storage;
 
+#if BUILD_DEBUG
     debug_platform_read_entire_file*  DebugPlatformReadEntireFile;
     debug_platform_write_entire_file* DebugPlatformWriteEntireFile;
     debug_platform_free_file_memory*  DebugPlatformFreeFileMemory;
+#endif
 };
 
 inline uint32_t
@@ -111,9 +115,8 @@ SafeTruncateUint64(uint64_t val) {
 // function type
 typedef GAME_UPDATE_AND_RENDER(game_update_and_render);
 GAME_UPDATE_AND_RENDER(GameUpdateAndRenderStub) {}
-// TODO: see if we need to get rid of this declaration, since we'll load the function code from DLL in platform layer
-// and essentially using function pointer to call it.
-// GAME_UPDATE_AND_RENDER(GameUpdateAndRender);
+// TODO: see if we need to get rid of this declaration, since we'll load the function code from DLL in platform
+// layer and essentially using function pointer to call it. GAME_UPDATE_AND_RENDER(GameUpdateAndRender);
 
 #define GAME_GET_SOUND_SAMPLES(name) void name(Game_Memory* memory, Game_Sound_Output_Buffer* sound_buffer)
 // function type
@@ -123,8 +126,7 @@ GAME_GET_SOUND_SAMPLES(GameGetSoundSamplesStub) {}
 // NOTE: this has to be a very fast function, it cannot be more than 1ms or so
 // TODO: Reduce the pressure on this function's performance by measuring it.
 // declaration
-// TODO: see if we need to get rid of this declaration, since we'll load the function code from DLL in platform layer
-// and essentially using function pointer to call it.
-// GAME_GET_SOUND_SAMPLES(GameGetSoundSamples);
+// TODO: see if we need to get rid of this declaration, since we'll load the function code from DLL in platform
+// layer and essentially using function pointer to call it. GAME_GET_SOUND_SAMPLES(GameGetSoundSamples);
 
 #endif

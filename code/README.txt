@@ -20,8 +20,7 @@ Day 21 - Loading Game Code Dynamically
 
 - TODOs:
   - Change function pointer type definition naming to be consistent with other defintions
-  - Unload the game code
-  - Get rid of local_persist variables, put them in Game_State
+  - fix working directory, path
 
 Day 20 - Debugging Audio sync
 =============================

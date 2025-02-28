@@ -59,6 +59,7 @@ global x_input_set_state* XInputSetState_ = XInputSetStateStub;
 #define DSOUND_CREATE(name) HRESULT WINAPI name(LPCGUID pcGuidDevice, LPDIRECTSOUND* ppDS, LPUNKNOWN pUnkOuter)
 typedef DSOUND_CREATE(direct_sound_create);
 
+#ifdef HANDMADE_INTERNAL
 void
 DebugPlatformFreeFileMemory(void* memory) {
     VirtualFree(memory, 0, MEM_RELEASE);
@@ -122,6 +123,7 @@ DebugPlatformWriteEntireFile(const char* file_name, Debug_Read_File_Result read_
 
     return result;
 }
+#endif
 
 internal void
 Win32LoadXInput(void) {
@@ -144,7 +146,9 @@ struct Win32_Game_Code {
 internal Win32_Game_Code
 Win32LoadGameCode(void) {
     Win32_Game_Code result = {};
-    result.game_code_dll   = LoadLibraryA("handmade.dll");
+
+    CopyFileA("handmade.dll", "handmade_tmp.dll", FALSE);
+    result.game_code_dll = LoadLibraryA("handmade_tmp.dll");
 
     if (result.game_code_dll) {
         result.GameGetSoundSamples =
@@ -160,6 +164,17 @@ Win32LoadGameCode(void) {
     }
 
     return result;
+}
+
+internal void
+Win32UnloadGameCode(Win32_Game_Code* game_code) {
+    if (game_code->game_code_dll) {
+        FreeLibrary(game_code->game_code_dll);
+        game_code->game_code_dll       = NULL;
+        game_code->GameGetSoundSamples = GameGetSoundSamplesStub;
+        game_code->GameUpdateAndRender = GameUpdateAndRenderStub;
+        game_code->is_valid            = false;
+    }
 }
 
 internal void
@@ -634,7 +649,6 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
     bool sleep_is_granular = (bool)timeBeginPeriod(1);
 
     Win32LoadXInput();
-    Win32_Game_Code game = Win32LoadGameCode();
 
     WNDCLASSA windowClass = {};
 
@@ -709,9 +723,11 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
             game_memory.transient_storage_size = GigaBytes(4);
             game_memory.transient_storage =
                 VirtualAlloc(0, game_memory.transient_storage_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+#ifdef HANDMADE_INTERNAL
             game_memory.DebugPlatformReadEntireFile  = DebugPlatformReadEntireFile;
             game_memory.DebugPlatformWriteEntireFile = DebugPlatformWriteEntireFile;
             game_memory.DebugPlatformFreeFileMemory  = DebugPlatformFreeFileMemory;
+#endif
 
             // Game input
             Game_Input  game_inputs[2] = {};
@@ -734,7 +750,17 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
             int16_t*  samples =
                 (int16_t*)VirtualAlloc(0, sound_output.secondary_buffer_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 
+            Win32_Game_Code game         = Win32LoadGameCode();
+            uint32_t        load_counter = 0;
+
             while (g_app_running) {
+                if (load_counter > 120) {
+                    Win32UnloadGameCode(&game);
+                    game         = Win32LoadGameCode();
+                    load_counter = 0;
+                }
+                load_counter++;
+
                 // keyboard controller
                 Game_Controller_Input* old_keyboard_controller = &old_input->keyboard_controller;
                 Game_Controller_Input* new_keyboard_controller = &new_input->keyboard_controller;
@@ -1070,7 +1096,7 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
                     Game_Input* temp = new_input;
                     new_input        = old_input;
                     old_input        = temp;
-                }
+                } // game loop
             }
         }
     } else {

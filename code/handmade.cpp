@@ -8,15 +8,15 @@
 #pragma intrinsic(sin)
 
 internal void
-GameOutputSound(Game_Sound_Output_Buffer* buffer, int tone_hz) {
+GameOutputSound(Game_Sound_Output_Buffer* buffer, Game_State* game_state) {
     local_persist float32_t t_sine;
 
     int16_t tone_volume = 3000;
-    int     wave_period = buffer->samples_per_second / tone_hz;
+    int     wave_period = buffer->samples_per_second / game_state->tone_hz;
 
     int16_t* sample_out = buffer->samples;
     for (int sample_idx = 0; sample_idx < buffer->sample_count; ++sample_idx) {
-        float32_t sine_val   = (float32_t)sin(t_sine); // use the intrinsic version of sin, not the stdlib
+        float32_t sine_val   = (float32_t)sin(game_state->t_sine); // use the intrinsic version of sin, not the stdlib
         int16_t   sample_val = (int16_t)(sine_val * tone_volume);
 
         // left
@@ -27,9 +27,9 @@ GameOutputSound(Game_Sound_Output_Buffer* buffer, int tone_hz) {
         ++sample_out;
 
         // NOTE: if we keep adding t_sine will lose its precision, since sine function is periodic (2*pi)
-        t_sine += 2.0f * PI * 1.0f / (float32_t)wave_period;
-        if (t_sine > 2.0f * PI) {
-            t_sine -= 2.0f * PI;
+        game_state->t_sine += 2.0f * PI * 1.0f / (float32_t)wave_period;
+        if (game_state->t_sine > 2.0f * PI) {
+            game_state->t_sine -= 2.0f * PI;
         }
     }
 }
@@ -59,7 +59,7 @@ GAME_GET_SOUND_SAMPLES(GameGetSoundSamples) {
     Assert(sizeof(Game_State) <= memory->permanent_storage_size);
 
     Game_State* state = (Game_State*)memory->permanent_storage;
-    GameOutputSound(sound_buffer, state->tone_hz);
+    GameOutputSound(sound_buffer, state);
 }
 
 extern "C" __declspec(dllexport)
@@ -68,16 +68,19 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
     Game_State* state = (Game_State*)memory->permanent_storage;
     if (!memory->is_initialized) {
+#ifdef HANDMADE_INTERNAL
         const char*            file_name = __FILE__;
         Debug_Read_File_Result file      = memory->DebugPlatformReadEntireFile(file_name);
         if (file.content) {
             memory->DebugPlatformWriteEntireFile("test.out", file);
             memory->DebugPlatformFreeFileMemory(file.content);
         }
+#endif
 
         state->x_offset        = 0;
         state->y_offset        = 0;
         state->tone_hz         = 256;
+        state->t_sine          = 0.0f;
         memory->is_initialized = true;
     }
 
