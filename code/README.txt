@@ -1,4 +1,13 @@
 
+Day 22 - Instant Live code editing
+==================================
+
+- Check the file write time to load the dll
+- deal with the working directory, I did use strcat to deal with strings.
+- Do we need to deal with pdb locking? 
+  - I only encountered once that RemedyBG is conflicting with builds
+
+
 Day 21 - Loading Game Code Dynamically
 ======================================
 

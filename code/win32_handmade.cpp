@@ -1,6 +1,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <dsound.h>
 #include <intrin.h>
 #include <math.h>
@@ -8,7 +9,6 @@
 #include <xinput.h>
 
 #include "base.h"
-#include "handmade.h"
 #include "win32_handmade.h"
 
 /*
@@ -134,21 +134,27 @@ Win32LoadXInput(void) {
     }
 }
 
-struct Win32_Game_Code {
-    HMODULE game_code_dll;
+internal FILETIME
+Win32GetFileLastWriteTime(const char* file_name) {
+    FILETIME        last_writ_time = {};
+    WIN32_FIND_DATA find_data;
 
-    game_get_sound_samples* GameGetSoundSamples;
-    game_update_and_render* GameUpdateAndRender;
+    HANDLE find_handle = FindFirstFileA(file_name, &find_data);
+    if (find_handle) {
+        last_writ_time = find_data.ftLastWriteTime;
+        FindClose(find_handle);
+    }
 
-    bool is_valid;
-};
+    return last_writ_time;
+}
 
 internal Win32_Game_Code
-Win32LoadGameCode(void) {
+Win32LoadGameCode(const char* source_dll_name, const char* temp_dll_name) {
     Win32_Game_Code result = {};
 
-    CopyFileA("handmade.dll", "handmade_tmp.dll", FALSE);
-    result.game_code_dll = LoadLibraryA("handmade_tmp.dll");
+    CopyFileA(source_dll_name, temp_dll_name, FALSE);
+    result.game_code_dll       = LoadLibraryA(temp_dll_name);
+    result.dll_last_write_time = Win32GetFileLastWriteTime(source_dll_name);
 
     if (result.game_code_dll) {
         result.GameGetSoundSamples =
@@ -750,16 +756,40 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cm
             int16_t*  samples =
                 (int16_t*)VirtualAlloc(0, sound_output.secondary_buffer_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 
-            Win32_Game_Code game         = Win32LoadGameCode();
-            uint32_t        load_counter = 0;
+            // get working directory
+            char exe_file_path[MAX_PATH];
+            GetModuleFileNameA(NULL, exe_file_path, sizeof(exe_file_path));
+            char* last_slash_pos = exe_file_path;
+            for (char* p = exe_file_path; *p != '\0'; ++p) {
+                if (*p == '\\') {
+                    last_slash_pos = p;
+                }
+            }
+            last_slash_pos++;
+
+            const char* source_dll_name = "handmade.dll";
+            char        source_dll_full_path[MAX_PATH];
+            strncpy_s(source_dll_full_path, MAX_PATH, exe_file_path, last_slash_pos - exe_file_path);
+            strncpy_s(
+                source_dll_full_path + (last_slash_pos - exe_file_path),
+                MAX_PATH,
+                source_dll_name,
+                strlen(source_dll_name));
+
+            const char* temp_dll_name = "handmade_temp.dll";
+            char        temp_dll_full_path[MAX_PATH];
+            strncpy_s(temp_dll_full_path, MAX_PATH, exe_file_path, last_slash_pos - exe_file_path);
+            strncpy_s(
+                temp_dll_full_path + (last_slash_pos - exe_file_path), MAX_PATH, temp_dll_name, strlen(temp_dll_name));
+
+            Win32_Game_Code game = Win32LoadGameCode(source_dll_full_path, temp_dll_full_path);
 
             while (g_app_running) {
-                if (load_counter > 120) {
+                FILETIME last_write_time = Win32GetFileLastWriteTime(source_dll_full_path);
+                if (CompareFileTime(&last_write_time, &game.dll_last_write_time) != 0) {
                     Win32UnloadGameCode(&game);
-                    game         = Win32LoadGameCode();
-                    load_counter = 0;
+                    game = Win32LoadGameCode(source_dll_full_path, temp_dll_full_path);
                 }
-                load_counter++;
 
                 // keyboard controller
                 Game_Controller_Input* old_keyboard_controller = &old_input->keyboard_controller;

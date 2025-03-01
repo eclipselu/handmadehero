@@ -1,9 +1,9 @@
 #ifndef WIN32_HANDMADE_H
 #define WIN32_HANDMADE_H
 
-#include <cstdint>
 #include <stdint.h>
 #include <Windows.h>
+#include "handmade.h"
 
 struct Win32_Offscreen_Buffer {
     BITMAPINFO info;
@@ -41,6 +41,16 @@ struct Win32_Debug_Time_Marker {
     DWORD expected_flip_play_cursor;
     DWORD flip_play_cursor;
     DWORD flip_write_cursor;
+};
+
+struct Win32_Game_Code {
+    HMODULE  game_code_dll;
+    FILETIME dll_last_write_time;
+
+    game_get_sound_samples* GameGetSoundSamples;
+    game_update_and_render* GameUpdateAndRender;
+
+    bool is_valid;
 };
 
 #endif
